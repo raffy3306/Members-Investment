@@ -205,6 +205,15 @@ function getStatusClass(status) {
 // 📦 STORE DATA FOR MODAL
 let allRequests = [];
 
+function normalizeValue(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function requestBelongsToBranch(request, branchId) {
+  if (!Array.isArray(request)) return false;
+  return normalizeValue(request[12]) === normalizeValue(branchId);
+}
+
 async function loadStyledTable(tableId, role) {
   const res = await fetch(API, {
     method: "POST",
@@ -274,7 +283,7 @@ async function loadStyledTable(tableId, role) {
       let extraColumn = "";
       if (tableId === "branchTable") {
         // Branch managers only see requests from their branch
-        if (r[12] !== branchId) continue;
+        if (!requestBelongsToBranch(r, branchId)) continue;
         extraColumn = `<td>${r[7]}</td>`; // SUBMITTED BY
       } else if (tableId === "financeTable") {
         extraColumn = `<td>${r[8]}</td>`; // BRANCH MANAGER
@@ -580,7 +589,7 @@ async function loadBranchTable() {
     const r = data[i];
 
     // SHOW ONLY RELEVANT RECORDS FROM SAME BRANCH
-    if ((r[6] === "Pending" || r[6] === "Under Review") && r[12] === branchId) {
+    if ((r[6] === "Pending" || r[6] === "Under Review") && requestBelongsToBranch(r, branchId)) {
       const dateStr = r[10] ? new Date(r[10]).toLocaleString() : "N/A";
 
       html += `
@@ -621,7 +630,7 @@ async function loadBranchCounts() {
 
   for (let i = 1; i < data.length; i++) {
     // Only count requests from same branch
-    if (data[i][12] !== branchId) continue;
+    if (!requestBelongsToBranch(data[i], branchId)) continue;
     total++;
 
     if (data[i][6] === "Pending") pending++;
@@ -797,7 +806,7 @@ function loadBranchSubmitted() {
       for (let i = 1; i < data.length; i++) {
         const r = data[i];
         if (!Array.isArray(r)) continue;
-        if (r[6] === 'Forwarded' && r[12] === branchId) {
+        if (r[6] === 'Forwarded' && requestBelongsToBranch(r, branchId)) {
           count++;
           const dateStr = r[10] ? new Date(r[10]).toLocaleString() : 'N/A';
           html += `
