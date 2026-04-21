@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+
+<script>
+if (localStorage.getItem("role") !== "admin") {
+  window.location.href = "login.html";
+}
+</script>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>WithdrawSys</h2>
+    </div>
+
+    <div class="sidebar-role">
+      <span class="role-badge" style="background: rgba(168, 85, 247, 0.2); color: #a855f7;">💜 Admin</span>
+    </div>
+
+    <div class="sidebar-main">
+      <button class="sidebar-btn active" onclick="navigateToAdmin('requests')">
+        <span class="icon">📋</span> All Requests
+      </button>
+      <button class="sidebar-btn" onclick="navigateToAdmin('settings')">
+        <span class="icon">⚙️</span> Settings
+      </button>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="sidebar-btn" onclick="logout()">
+        <span class="icon">🚪</span> Sign Out
+      </button>
+      <div class="sidebar-user">
+        <div class="user-fullname" id="userFullName">Admin User</div>
+        <div class="user-email" id="userEmail">admin@example.com</div>
+        <div class="user-position" id="userPosition">System Administrator</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-header">
+      <div class="header-content">
+        <h1>💜 Admin Dashboard</h1>
+        <p class="subtitle">April 2026 · Review system requests, settings, and approval metrics</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn blue" onclick="location.reload()">🔄 Refresh</button>
+        <button class="btn blue" onclick="exportData()">📥 Export</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon approved">✓</div>
+        <h3>Total Requests</h3>
+        <p id="adminTotal" class="card-number">0</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon awaiting">⏳</div>
+        <h3>Pending</h3>
+        <p id="adminPending" class="card-number awaiting-color">0</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon flagged">⚡</div>
+        <h3>Forwarded</h3>
+        <p id="adminForwarded" class="card-number approved-color">0</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon rejected">✕</div>
+        <h3>Approved</h3>
+        <p id="adminApproved" class="card-number">0</p>
+      </div>
+    </div>
+
+    <div id="requestsSection">
+      <div class="table-container">
+        <div class="table-header">
+          <div>
+            <h3>All Withdrawal Requests</h3>
+            <p class="table-count" id="tableCount">0 requests listed</p>
+          </div>
+          <div class="table-controls">
+            <input type="text" placeholder="Search member, purpose..." class="search-input" id="adminSearch" oninput="filterAdminTable()">
+            <select class="status-filter" id="adminStatusFilter" onchange="filterAdminTable()">
+              <option>All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Forwarded">Forwarded</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>REQUEST NO.</th>
+              <th>MEMBER NAME</th>
+              <th>TOTAL INVESTMENT</th>
+              <th>AMOUNT WITHDRAWN</th>
+              <th>BALANCE</th>
+              <th>PURPOSE</th>
+              <th>BRANCH MANAGER</th>
+              <th>STATUS</th>
+              <th>DATE</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="adminTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="settingsSection" style="display: none;">
+      <h3>Signatory Settings</h3>
+      <div class="card" style="padding: 20px;">
+        <label for="tellerSignatory">Teller Name</label>
+        <input id="tellerSignatory" placeholder="Enter teller signatory name" class="form-control">
+
+        <label for="branchManagerSignatory">Branch Manager Name</label>
+        <input id="branchManagerSignatory" placeholder="Enter branch manager signatory name" class="form-control">
+
+        <label for="financeManagerSignatory">Savings and Credit Head Name</label>
+        <input id="financeManagerSignatory" placeholder="Enter finance manager signatory name" class="form-control">
+
+        <button class="btn blue" onclick="saveSignatorySettings()">Save Settings</button>
+      </div>
+
+      <div class="card" style="padding: 20px; margin-top: 20px;">
+        <h4>Upload Electronic Signatures</h4>
+
+        <div class="signature-upload-row">
+          <label for="tellerSignatureFile">Teller Signature</label>
+          <input id="tellerSignatureFile" type="file" accept="image/*">
+          <button class="btn blue" onclick="uploadSignature('teller')">Upload Teller Signature</button>
+          <button class="btn red" onclick="clearSignature('teller')">Clear Signature</button>
+          <img id="tellerSignaturePreview" class="signature-preview" alt="Teller Signature Preview">
+        </div>
+
+        <div class="signature-upload-row">
+          <label for="branchSignatureFile">Branch Manager Signature</label>
+          <input id="branchSignatureFile" type="file" accept="image/*">
+          <button class="btn blue" onclick="uploadSignature('branchManager')">Upload Branch Manager Signature</button>
+          <button class="btn red" onclick="clearSignature('branchManager')">Clear Signature</button>
+          <img id="branchSignaturePreview" class="signature-preview" alt="Branch Manager Signature Preview">
+        </div>
+
+        <div class="signature-upload-row">
+          <label for="financeSignatureFile">Savings and Credit Head Signature</label>
+          <input id="financeSignatureFile" type="file" accept="image/*">
+          <button class="btn blue" onclick="uploadSignature('financeManager')">Upload Savings and Credit Head Signature</button>
+          <button class="btn red" onclick="clearSignature('financeManager')">Clear Signature</button>
+          <img id="financeSignaturePreview" class="signature-preview" alt="Savings and Credit Headdit Head Signature Preview">
+        </div>
+      </div>
+
+      <div class="card" style="padding: 20px; margin-top: 20px;">
+        <h4>Upload Report Header Logo</h4>
+
+        <div class="signature-upload-row">
+          <label for="logoFile">Report Header Logo</label>
+          <input id="logoFile" type="file" accept="image/*">
+          <button class="btn blue" onclick="uploadLogo()">Upload Logo</button>
+          <button class="btn red" onclick="clearLogo()">Clear Logo</button>
+          <img id="logoPreview" class="signature-preview" alt="Logo Preview" style="max-width: 300px; max-height: 120px;">
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3>Request Details</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+showSection('requests');
+loadAdminTable();
+loadAdminCounts();
+setDashboardUserDetails();
+loadSettings();
+
+function showSection(section) {
+  document.getElementById('requestsSection').style.display = section === 'requests' ? 'block' : 'none';
+  document.getElementById('settingsSection').style.display = section === 'settings' ? 'block' : 'none';
+}
+</script>
+
+</body>
+</html>

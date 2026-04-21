@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+
+<script>
+if (localStorage.getItem("role") !== "branch_manager") {
+  window.location.href = "login.html";
+}
+</script>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Branch Manager</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>WithdrawSys</h2>
+    </div>
+
+    <div class="sidebar-role">
+      <span class="role-badge">🔧 Branch Manager</span>
+    </div>
+    
+    <div class="sidebar-main">
+      <button class="sidebar-btn active" onclick="navigateToBranch('review')">
+        <span class="icon">📋</span> Review Requests
+        <span class="badge-count" id="reviewBadge">0</span>
+      </button>
+      <button class="sidebar-btn" onclick="navigateToBranch('dashboard')">
+        <span class="icon">📊</span> Dashboard
+      </button>
+      <button class="sidebar-btn" onclick="navigateToBranch('submitted')">
+        <span class="icon">✅</span> Submitted to Savings and Credit Head
+      </button>
+    </div>
+
+    <div class="sidebar-more">
+      <button class="sidebar-btn" onclick="navigateToBranch('notifications')">
+        <span class="icon">🔔</span> Notifications
+        <span class="badge-count" id="notificationBadge">0</span>
+      </button>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="sidebar-btn" onclick="navigateToBranch('settings')">
+        <span class="icon">⚙️</span> Settings
+      </button>
+      <button class="sidebar-btn" onclick="logout()">
+        <span class="icon">🚪</span> Sign Out
+      </button>
+      <div class="sidebar-user">
+        <div class="user-fullname" id="userFullName">James Reyes</div>
+        <div class="user-position" id="userPosition">Branch Management</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-header">
+      <div class="header-content">
+        <h1>🔧 Branch Manager Review</h1>
+        <p class="subtitle">Review withdrawal requests submitted by Tellers · Forward approved requests to Savings and Credit Head</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn blue" onclick="location.reload()"><span>🔄</span> Refresh</button>
+      </div>
+    </div>
+
+    <div id="reviewView">
+      <!-- DASHBOARD CARDS -->
+      <div class="cards">
+        <div class="card">
+          <h3>Total Requests</h3>
+          <p id="bmTotal" class="card-number">0</p>
+        </div>
+
+        <div class="card">
+          <h3>Pending Review</h3>
+          <p id="bmPending" class="card-number pending-color">0</p>
+        </div>
+
+        <div class="card">
+          <h3>Under Review</h3>
+          <p id="bmReview" class="card-number review-color">0</p>
+        </div>
+
+        <div class="card">
+          <h3>Forwarded to Savings and Credit Head</h3>
+          <p id="bmForwarded" class="card-number approved-color">0</p>
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="table-container">
+        <div class="table-header">
+          <div>
+            <h3>Withdrawal Requests for Review</h3>
+            <p class="table-count" id="tableCount"></p>
+          </div>
+          <div class="table-controls">
+            <input type="text" placeholder="Search member, type..." class="search-input">
+            <select class="status-filter">
+              <option>All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Under Review">Under Review</option>
+            </select>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>REQUEST NO.</th>
+              <th>MEMBER NAME</th>
+              <th>TOTAL INVESTMENT</th>
+              <th>AMOUNT WITHDRAWN</th>
+              <th>BALANCE</th>
+              <th>PURPOSE</th>
+              <th>SUBMITTED BY</th>
+              <th>STATUS</th>
+              <th>DATE</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="branchTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="dashboardView" style="display: none;">
+      <div class="cards">
+        <div class="card">
+          <h3>Total Requests</h3>
+          <p id="dashboardTotal" class="card-number">0</p>
+        </div>
+        <div class="card">
+          <h3>Pending Review</h3>
+          <p id="dashboardPending" class="card-number pending-color">0</p>
+        </div>
+        <div class="card">
+          <h3>Under Review</h3>
+          <p id="dashboardReview" class="card-number review-color">0</p>
+        </div>
+        <div class="card">
+          <h3>Forwarded</h3>
+          <p id="dashboardForwarded" class="card-number approved-color">0</p>
+        </div>
+      </div>
+      <div class="table-container">
+        <div class="table-header">
+          <div>
+            <h3>Branch Dashboard</h3>
+            <p class="table-count" id="dashboardCount">Overview of branch activity and workflow status</p>
+          </div>
+        </div>
+        <div style="padding: 30px; background: #fff; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); color: #444;">
+          <p>This dashboard shows a summary of branch request volume, pending tasks, and forwarded approvals.</p>
+          <p>Use the sidebar to review pending requests, monitor forwarded submissions, or view notifications.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="submittedView" style="display: none;">
+      <div class="table-container">
+        <div class="table-header">
+          <div>
+            <h3>Submitted to Savings and Credit Head</h3>
+            <p class="table-count" id="submittedCount">0 requests</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>REQUEST NO.</th>
+              <th>MEMBER NAME</th>
+              <th>TOTAL INVESTMENT</th>
+              <th>AMOUNT WITHDRAWN</th>
+              <th>BALANCE</th>
+              <th>PURPOSE</th>
+              <th>SUBMITTED BY</th>
+              <th>STATUS</th>
+              <th>DATE</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="submittedTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="notificationsView" style="display: none;">
+      <div style="padding: 40px; text-align: center; color: #666;">
+        <h2>Notifications</h2>
+        <p>You have no new notifications.</p>
+      </div>
+    </div>
+
+    <div id="settingsView" style="display: none;">
+      <div style="padding: 40px; color: #444;">
+        <h2>Branch Settings</h2>
+        <p>Manage your branch preferences and account settings here.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="modal">
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3>Request Details</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalContent"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+<script>
+loadBranchTable();
+loadBranchCounts();
+loadUserProfile();
+</script>
+
+</body>
+</html>
