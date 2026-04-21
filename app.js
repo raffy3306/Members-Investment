@@ -397,7 +397,7 @@ function openModal(id) {
 
       const forwardBtn = document.createElement("button");
       forwardBtn.className = "btn green role-action-btn";
-      forwardBtn.textContent = "Forward to Finance";
+      forwardBtn.textContent = "Forward to Approver";
       forwardBtn.onclick = () => updateStatus(r[0], "Forwarded");
       modalFooter.appendChild(forwardBtn);
     } else if (localStorage.getItem("role") === "finance_manager" && r[6] === "Forwarded") {
