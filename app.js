@@ -544,39 +544,39 @@ async function printRequest() {
 
   printWindow.document.write(`<html><head><title>Investment Withdrawal Form ${r[0]}</title>`);
   printWindow.document.write(`<style>
-      @page{size:A4 portrait; margin:18mm 16mm;}
+      @page{size:8.5in 11in; margin:11mm 12mm;}
       *{box-sizing:border-box;}
       body{font-family:Arial, sans-serif; margin:0; color:#111; background:#fff;}
-      .page{max-width:820px; margin:0 auto; padding:8px 6px 0;}
-      .header{text-align:center; margin-bottom:64px;}
-      .header img{max-width:320px; max-height:90px; height:auto; display:block; margin:0 auto 24px;}
-      .header h1{margin:0; font-size:26px; font-weight:700; letter-spacing:2px;}
-      .top-row{display:grid; grid-template-columns:1fr 280px; align-items:start; margin-bottom:46px;}
+      .page{max-width:760px; margin:0 auto; padding:4px 4px 0;}
+      .header{text-align:center; margin-bottom:34px;}
+      .header img{max-width:280px; max-height:72px; height:auto; display:block; margin:0 auto 14px;}
+      .header h1{margin:0; font-size:22px; font-weight:700; letter-spacing:1.6px;}
+      .top-row{display:grid; grid-template-columns:1fr 235px; align-items:start; margin-bottom:26px;}
       .date-group{display:grid; grid-template-columns:auto 1fr; align-items:start; column-gap:18px; justify-self:end; width:100%;}
-      .label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.4px; color:#666;}
-      .inline-label{padding-top:12px;}
-      .field-box{border:1px solid #cfcfcf; border-radius:4px; min-height:84px; padding:22px 16px; font-size:16px; display:flex; align-items:center;}
-      .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:26px; margin-bottom:42px;}
-      .field-group .label{display:block; margin-bottom:8px;}
-      .summary{display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-bottom:24px;}
-      .summary-item{border:2px solid #aeb3b8; border-radius:4px; text-align:center; padding:18px 14px 16px;}
+      .label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#666;}
+      .inline-label{padding-top:10px;}
+      .field-box{border:1px solid #cfcfcf; border-radius:4px; min-height:62px; padding:14px 12px; font-size:14px; display:flex; align-items:center;}
+      .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px;}
+      .field-group .label{display:block; margin-bottom:6px;}
+      .summary{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px;}
+      .summary-item{border:2px solid #aeb3b8; border-radius:4px; text-align:center; padding:12px 10px;}
       .summary-item .label{margin-bottom:8px; font-size:10px;}
-      .summary-item .amount{font-size:18px; font-weight:700; letter-spacing:0.2px;}
-      .reason-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#c73342; margin-bottom:10px;}
-      .reason-box{border:1px solid #cfcfcf; border-radius:4px; min-height:112px; padding:14px; font-size:15px; line-height:1.45; margin-bottom:18px;}
-      .footer-note{margin:0 0 48px; font-size:15px; line-height:1.4; color:#444;}
-      .subscriber-signature{display:flex; justify-content:flex-end; margin-bottom:88px;}
-      .subscriber-signature .signature-box{text-align:center; min-width:260px;}
-      .signature-image{display:block; max-width:170px; max-height:56px; margin:0 auto 6px;}
-      .signature-line{width:160px; height:44px; border-bottom:1px solid #444; margin:0 auto 6px;}
-      .signature-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#666; margin-bottom:64px;}
-      .signatory-name{font-size:15px; font-weight:700; text-transform:uppercase; line-height:1.2;}
-      .signatory-role{font-size:12px; text-transform:uppercase; letter-spacing:0.8px; color:#666;}
-      .signature-caption{font-size:11px; color:#444;}
-      .approval-section{margin-top:10px;}
-      .two-signatures{display:grid; grid-template-columns:1fr 1fr; gap:80px; margin-bottom:56px;}
+      .summary-item .amount{font-size:16px; font-weight:700; letter-spacing:0.2px;}
+      .reason-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.1px; color:#c73342; margin-bottom:8px;}
+      .reason-box{border:1px solid #cfcfcf; border-radius:4px; min-height:86px; padding:10px 12px; font-size:13px; line-height:1.35; margin-bottom:12px;}
+      .footer-note{margin:0 0 24px; font-size:13px; line-height:1.35; color:#444;}
+      .subscriber-signature{display:flex; justify-content:flex-end; margin-bottom:42px;}
+      .subscriber-signature .signature-box{text-align:center; min-width:220px;}
+      .signature-image{display:block; max-width:145px; max-height:44px; margin:0 auto 4px;}
+      .signature-line{width:138px; height:30px; border-bottom:1px solid #444; margin:0 auto 4px;}
+      .signature-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.1px; color:#666; margin-bottom:36px;}
+      .signatory-name{font-size:13px; font-weight:700; text-transform:uppercase; line-height:1.2;}
+      .signatory-role{font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:#666;}
+      .signature-caption{font-size:10px; color:#444;}
+      .approval-section{margin-top:6px;}
+      .two-signatures{display:grid; grid-template-columns:1fr 1fr; gap:42px; margin-bottom:24px;}
       .two-signatures .signature-box{text-align:center;}
-      .approved-signature{text-align:center; max-width:320px; margin:0 auto;}
+      .approved-signature{text-align:center; max-width:260px; margin:0 auto;}
       @media print{
         body{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
       }
