@@ -271,7 +271,11 @@ function updateStatus(data) {
       }
 
       if (data.role === "finance_manager") {
-        sheet.getRange(i + 1, 10).setValue(data.financeManagerName || data.financeManagerEmail); // ApprovedBy (column 10)
+        if (data.status === "Approved" || data.status === "Rejected") {
+          sheet.getRange(i + 1, 10).setValue(data.financeManagerName || data.financeManagerEmail); // ApprovedBy (column 10)
+        } else {
+          sheet.getRange(i + 1, 10).setValue(""); // Clear ApprovedBy when sent back for further review
+        }
       }
 
       // Update DateStamp column (column K = 11)

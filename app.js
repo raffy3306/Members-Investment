@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbxbeqUN6cD5om1_d5zC3jQfntzlq9xIxW6GV_hbkuQecODHzfTgMU7foOy4DDdkBs3n/exec";
+const API = "https://script.google.com/macros/s/AKfycbzuM5k_3oP1-OgzJ7-BbmUIwyLQazPh7vWW9mh67ZsuVF7znn67Ie3RMZk42TGwFrcX/exec";
 
 let pendingLoginData = null;
 let editingRequestId = null;
@@ -421,6 +421,16 @@ async function updateStatus(id, status) {
       return;
     }
   }
+
+  if (role === "finance_manager" && status === "Under Review") {
+    notes = window.prompt("Enter notes for the branch manager before returning this request:", "") || "";
+    notes = notes.trim();
+
+    if (!notes) {
+      alert("Notes are required before returning a request to the branch manager.");
+      return;
+    }
+  }
   
   let updateData = {
     action: "updateStatus",
@@ -640,10 +650,10 @@ function openModal(id) {
       <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600;">Current Status:</label>
       <span class="${getStatusClass(r[6])}" style="padding: 4px 10px; border-radius: 20px; font-size: 12px;">${r[6]}</span>
     </div>
-    ${r[6] === "Returned" ? `
+    ${((r[6] === "Returned" || r[6] === "Under Review") && branchManagerNotes) ? `
       <div style="margin-top: 20px; padding: 16px; background: #fff4f4; border-left: 4px solid #dc2626; border-radius: 6px;">
-        <label style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">Branch Manager Notes</label>
-        <p style="margin: 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(branchManagerNotes || "No notes provided.")}</p>
+        <label style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">${r[6] === "Returned" ? "Branch Manager Notes" : "Finance Manager Notes"}</label>
+        <p style="margin: 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(branchManagerNotes)}</p>
       </div>
     ` : ""}
   `;
@@ -676,10 +686,17 @@ function openModal(id) {
       forwardBtn.onclick = () => updateStatus(r[0], "Forwarded");
       modalFooter.appendChild(forwardBtn);
     } else if (localStorage.getItem("role") === "finance_manager" && r[6] === "Forwarded") {
+      const returnBtn = document.createElement("button");
+      returnBtn.className = "btn red role-action-btn";
+      returnBtn.style.cssText = "margin-left: auto; margin-right: 10px;";
+      returnBtn.textContent = "Return";
+      returnBtn.onclick = () => updateStatus(r[0], "Under Review");
+      modalFooter.appendChild(returnBtn);
+
       if (approveBtn) {
         approveBtn.style.display = "block";
         approveBtn.className = "btn green";
-        approveBtn.style.cssText = "margin-left: auto; margin-right: 10px;";
+        approveBtn.style.cssText = "";
       }
       if (rejectBtn) {
         rejectBtn.style.display = "block";
