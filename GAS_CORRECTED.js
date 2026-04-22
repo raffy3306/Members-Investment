@@ -84,7 +84,7 @@ function forgotPassword(email) {
     const fullname = String(rows[i][3] || "User").trim();
 
     if (sheetEmail === normalizedEmail) {
-      GmailApp.sendEmail(
+      MailApp.sendEmail(
         normalizedEmail,
         "Investment Withdrawal System Password Recovery",
         "Hello " + fullname + ",\n\n" +
