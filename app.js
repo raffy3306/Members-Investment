@@ -205,7 +205,7 @@ async function submitRequest() {
       tellerName: localStorage.getItem("fullname"),
       tellerEmail: localStorage.getItem("user"),
       tellerBranchId: localStorage.getItem("branchid"),
-      dateStamp: new Date().toLocaleString()
+      date: new Date().toLocaleDateString()
     })
   });
 

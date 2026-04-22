@@ -125,7 +125,7 @@ function createRequest(data) {
     data.tellerName || data.tellerEmail,   // ProcessedBy (fullname, fallback to email)
     "",                 // CheckedBy
     "",                 // ApprovedBy
-    data.dateStamp || new Date().toLocaleString(),  // DateStamp (column K = 10)
+    data.date || data.dateStamp || new Date().toLocaleDateString(),  // Date (legacy DateStamp fallback) in column K
     data.contactNumber,  // ContactNumber (column L = 11)
     data.tellerBranchId || ""  // TellerBranchId (column M = 12)
   ]);
