@@ -53,7 +53,7 @@ if (localStorage.getItem("role") !== "admin") {
     <div class="main-header">
       <div class="header-content">
         <h1>💜 Admin Dashboard</h1>
-        <p class="subtitle">April 2026 · Review system requests, settings, and approval metrics</p>
+        <p class="subtitle">Review system requests, settings, and approval metrics</p>
       </div>
       <div class="header-actions">
         <button class="btn blue" onclick="location.reload()">🔄 Refresh</button>
@@ -147,7 +147,7 @@ if (localStorage.getItem("role") !== "admin") {
         <div class="signature-upload-row">
           <label for="tellerSignatureFile">Teller Signature</label>
           <input id="tellerSignatureFile" type="file" accept="image/*">
-          <button class="btn blue" onclick="uploadSignature('teller')">Upload Teller Signature</button>
+          <button class="btn blue" onclick="uploadSignature('teller')">Upload Signature</button>
           <button class="btn red" onclick="clearSignature('teller')">Clear Signature</button>
           <img id="tellerSignaturePreview" class="signature-preview" alt="Teller Signature Preview">
         </div>
@@ -155,7 +155,7 @@ if (localStorage.getItem("role") !== "admin") {
         <div class="signature-upload-row">
           <label for="branchSignatureFile">Branch Manager Signature</label>
           <input id="branchSignatureFile" type="file" accept="image/*">
-          <button class="btn blue" onclick="uploadSignature('branchManager')">Upload Branch Manager Signature</button>
+          <button class="btn blue" onclick="uploadSignature('branchManager')">Upload Signature</button>
           <button class="btn red" onclick="clearSignature('branchManager')">Clear Signature</button>
           <img id="branchSignaturePreview" class="signature-preview" alt="Branch Manager Signature Preview">
         </div>
@@ -163,7 +163,7 @@ if (localStorage.getItem("role") !== "admin") {
         <div class="signature-upload-row">
           <label for="financeSignatureFile">Savings and Credit Head Signature</label>
           <input id="financeSignatureFile" type="file" accept="image/*">
-          <button class="btn blue" onclick="uploadSignature('financeManager')">Upload Savings and Credit Head Signature</button>
+          <button class="btn blue" onclick="uploadSignature('financeManager')">Upload Signature</button>
           <button class="btn red" onclick="clearSignature('financeManager')">Clear Signature</button>
           <img id="financeSignaturePreview" class="signature-preview" alt="Savings and Credit Headdit Head Signature Preview">
         </div>
