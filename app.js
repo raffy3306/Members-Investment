@@ -551,19 +551,21 @@ async function printRequest() {
       .header{text-align:center; margin-bottom:34px;}
       .header img{max-width:280px; max-height:72px; height:auto; display:block; margin:0 auto 14px;}
       .header h1{margin:0; font-size:22px; font-weight:700; letter-spacing:1.6px;}
-      .top-row{display:grid; grid-template-columns:1fr 235px; align-items:start; margin-bottom:26px;}
-      .date-group{display:grid; grid-template-columns:auto 1fr; align-items:start; column-gap:18px; justify-self:end; width:100%;}
+      .top-row{display:grid; grid-template-columns:1fr 228px; align-items:start; margin-bottom:22px;}
+      .date-group{display:grid; grid-template-columns:auto 1fr; align-items:center; column-gap:12px; justify-self:end; width:100%;}
       .label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#666;}
-      .inline-label{padding-top:10px;}
-      .field-box{border:1px solid #cfcfcf; border-radius:4px; min-height:62px; padding:14px 12px; font-size:14px; display:flex; align-items:center;}
-      .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:24px;}
+      .inline-label{padding-top:0;}
+      .field-box{border:1px solid #bfc5cb; border-radius:4px; min-height:62px; padding:14px 14px; font-size:14px; display:flex; align-items:center; background:#fff;}
+      .date-box{min-height:54px; padding:10px 14px; justify-content:flex-start;}
+      .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:20px;}
       .field-group .label{display:block; margin-bottom:6px;}
+      .name-box,.contact-box{min-height:66px; padding:16px 16px;}
       .summary{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px;}
       .summary-item{border:2px solid #aeb3b8; border-radius:4px; text-align:center; padding:12px 10px;}
       .summary-item .label{margin-bottom:8px; font-size:10px;}
       .summary-item .amount{font-size:16px; font-weight:700; letter-spacing:0.2px;}
       .reason-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.1px; color:#c73342; margin-bottom:8px;}
-      .reason-box{border:1px solid #cfcfcf; border-radius:4px; min-height:86px; padding:10px 12px; font-size:13px; line-height:1.35; margin-bottom:12px;}
+      .reason-box{border:1px solid #bfc5cb; border-radius:4px; min-height:102px; padding:14px 14px; font-size:13px; line-height:1.45; margin-bottom:12px; align-items:flex-start;}
       .footer-note{margin:0 0 24px; font-size:13px; line-height:1.35; color:#444;}
       .subscriber-signature{display:flex; justify-content:flex-end; margin-bottom:42px;}
       .subscriber-signature .signature-box{text-align:center; min-width:220px;}
@@ -583,8 +585,8 @@ async function printRequest() {
   </style>`);
   printWindow.document.write(`</head><body><div class="page">`);
   printWindow.document.write(`<div class="header">${headerImageSrc ? `<img src="${headerImageSrc}" alt="Report Header" />` : ''}<h1>Investment Withdrawal Form</h1></div>`);
-  printWindow.document.write(`<div class="top-row"><div></div><div class="date-group"><div class="label inline-label">Date</div><div class="field-box">${dateStr}</div></div></div>`);
-  printWindow.document.write(`<div class="field-grid"><div class="field-group"><div class="label">Subscriber's Name</div><div class="field-box">${memberName}</div></div><div class="field-group"><div class="label">Contact Number</div><div class="field-box">${contactNumber}</div></div></div>`);
+  printWindow.document.write(`<div class="top-row"><div></div><div class="date-group"><div class="label inline-label">Date</div><div class="field-box date-box">${dateStr}</div></div></div>`);
+  printWindow.document.write(`<div class="field-grid"><div class="field-group"><div class="label">Subscriber's Name</div><div class="field-box name-box">${memberName}</div></div><div class="field-group"><div class="label">Contact Number</div><div class="field-box contact-box">${contactNumber}</div></div></div>`);
   printWindow.document.write(`<div class="summary"><div class="summary-item"><div class="label">Total Investment</div><div class="amount">${totalAmount}</div></div><div class="summary-item"><div class="label">Withdrawal</div><div class="amount">${withdrawnAmount}</div></div><div class="summary-item"><div class="label">Remaining Balance</div><div class="amount">${balanceAmount}</div></div></div>`);
   printWindow.document.write(`<div class="reason-label">This is to request for withdrawal of my CATV/Internet investment for the reason:</div><div class="reason-box">${reason}</div>`);
   printWindow.document.write(`<p class="footer-note">I understand that an amount of Php 3,000 should be retained as my maintaining investment balance.</p>`);
