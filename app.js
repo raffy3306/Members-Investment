@@ -1,9 +1,45 @@
-const API = "https://script.google.com/macros/s/AKfycbywTLk-21yulYfPx7HQYSqBn97mKcdEEJwSLIpQ6Ix1xpmq_ZW7KBByvrLUjRizpi4o/exec";
+const API = "https://script.google.com/macros/s/AKfycbzTfgwDWCFFFUCRiRCejaO3SzXBY0Y56Fd1_Mc3e8-rGxMSC8AgBr7PQoXH_BbAbDs/exec";
+
+let pendingLoginData = null;
+
+function getRoleLabel(role) {
+  return role === "admin"
+    ? "System Administrator"
+    : role === "branch_manager"
+      ? "Branch Manager"
+      : role === "finance_manager"
+        ? "Savings and Credit Head"
+        : "Teller";
+}
+
+function persistSession(data) {
+  const fullname = data.fullname || (data.user && typeof data.user === "object" ? data.user.fullname || data.user.name : data.user) || "User";
+  const position = data.position || getRoleLabel(data.role);
+  const branchid = data.branchid || "";
+
+  localStorage.setItem("user", typeof data.user === "object" ? JSON.stringify(data.user) : data.user);
+  localStorage.setItem("role", data.role);
+  localStorage.setItem("fullname", fullname);
+  localStorage.setItem("position", position);
+  localStorage.setItem("branchid", branchid);
+}
+
+function redirectToDashboard(role) {
+  if (role === "teller") window.location.href = "teller.html";
+  else if (role === "branch_manager") window.location.href = "branch.html";
+  else if (role === "finance_manager") window.location.href = "finance.html";
+  else if (role === "admin") window.location.href = "admin.html";
+}
 
 // 🔐 LOGIN
 async function login() {
-  const email = document.getElementById("email").value;
+  const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
+
+  if (!email || !password) {
+    alert("Please enter your email and password.");
+    return;
+  }
 
   const url = `${API}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
 
@@ -14,31 +50,111 @@ async function login() {
     console.log(data);
 
     if (data.success) {
-      const roleLabel = data.role === "admin"
-        ? "System Administrator"
-        : data.role === "branch_manager"
-          ? "Branch Manager"
-          : data.role === "finance_manager"
-            ? "Savings and Credit Head"
-            : "Teller";
-      const fullname = data.fullname || (data.user && typeof data.user === 'object' ? data.user.fullname || data.user.name : data.user) || "User";
-      const position = data.position || roleLabel;
-      const branchid = data.branchid || "";
+      if (data.mustChangePassword) {
+        pendingLoginData = {
+          ...data,
+          email,
+          currentPassword: password
+        };
+        openFirstLoginPasswordModal(email);
+        return;
+      }
 
-      localStorage.setItem("user", typeof data.user === 'object' ? JSON.stringify(data.user) : data.user);
-      localStorage.setItem("role", data.role);
-      localStorage.setItem("fullname", fullname);
-      localStorage.setItem("position", position);
-      localStorage.setItem("branchid", branchid);
-
-      if (data.role === "teller") window.location.href = "teller.html";
-      else if (data.role === "branch_manager") window.location.href = "branch.html";
-      else if (data.role === "finance_manager") window.location.href = "finance.html";
-      else if (data.role === "admin") window.location.href = "admin.html";
+      persistSession(data);
+      redirectToDashboard(data.role);
     } else {
       alert("Invalid email or password");
     }
 
+  } catch (err) {
+    console.error(err);
+    alert("Connection error. Check your API URL.");
+  }
+}
+
+function openFirstLoginPasswordModal(email) {
+  const modal = document.getElementById("firstLoginPasswordModal");
+  const emailInput = document.getElementById("firstLoginEmail");
+  const currentPasswordInput = document.getElementById("currentPassword");
+  const newPasswordInput = document.getElementById("newPassword");
+  const confirmPasswordInput = document.getElementById("confirmPassword");
+
+  if (emailInput) emailInput.value = email || "";
+  if (currentPasswordInput && pendingLoginData) currentPasswordInput.value = pendingLoginData.currentPassword || "";
+  if (newPasswordInput) newPasswordInput.value = "";
+  if (confirmPasswordInput) confirmPasswordInput.value = "";
+
+  if (modal) {
+    modal.classList.add("active");
+  }
+}
+
+function closeFirstLoginPasswordModal() {
+  const modal = document.getElementById("firstLoginPasswordModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+}
+
+async function submitFirstLoginPasswordChange() {
+  const emailInput = document.getElementById("firstLoginEmail");
+  const currentPasswordInput = document.getElementById("currentPassword");
+  const newPasswordInput = document.getElementById("newPassword");
+  const confirmPasswordInput = document.getElementById("confirmPassword");
+
+  const email = emailInput ? emailInput.value.trim() : "";
+  const currentPassword = currentPasswordInput ? currentPasswordInput.value : "";
+  const newPassword = newPasswordInput ? newPasswordInput.value : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+
+  if (!pendingLoginData) {
+    alert("Please sign in again to continue.");
+    closeFirstLoginPasswordModal();
+    return;
+  }
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    alert("Please complete all password fields.");
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    alert("Your new password must be at least 8 characters long.");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    alert("New password and confirmation do not match.");
+    return;
+  }
+
+  if (newPassword === currentPassword) {
+    alert("Your new password must be different from your current password.");
+    return;
+  }
+
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "changePassword",
+        email,
+        currentPassword,
+        newPassword
+      })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      alert(data.message || "Unable to change password.");
+      return;
+    }
+
+    persistSession(pendingLoginData);
+    closeFirstLoginPasswordModal();
+    pendingLoginData = null;
+    alert("Password changed successfully. You can now continue.");
+    redirectToDashboard(localStorage.getItem("role"));
   } catch (err) {
     console.error(err);
     alert("Connection error. Check your API URL.");

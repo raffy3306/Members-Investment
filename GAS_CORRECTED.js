@@ -1,25 +1,80 @@
 const SHEET_ID = "15A0drhU4vAa1HA0FNGO9fefiYvmzmpAQgnLRoja0978";
 
+function getUsersSheet() {
+  return SpreadsheetApp.openById(SHEET_ID).getSheetByName("Users");
+}
+
+function getUsersSheetMeta() {
+  const sheet = getUsersSheet();
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows.length
+    ? rows[0].map(header => String(header || "").trim())
+    : [];
+
+  const headerLookup = {};
+  headers.forEach((header, index) => {
+    if (header) {
+      headerLookup[header.toLowerCase()] = index;
+    }
+  });
+
+  return { sheet, rows, headers, headerLookup };
+}
+
+function getHeaderIndex(headerLookup, candidates, fallbackIndex) {
+  for (let i = 0; i < candidates.length; i++) {
+    const key = String(candidates[i]).trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(headerLookup, key)) {
+      return headerLookup[key];
+    }
+  }
+
+  return fallbackIndex;
+}
+
+function normalizeFlag(value) {
+  const normalized = String(value == null ? "" : value).trim().toLowerCase();
+  return normalized === "true" || normalized === "yes" || normalized === "y" || normalized === "1";
+}
+
+function isFirstLoginUser(row, indexes) {
+  const firstLoginValue = indexes.firstLogin >= 0 ? row[indexes.firstLogin] : "";
+  const mustChangeValue = indexes.mustChangePassword >= 0 ? row[indexes.mustChangePassword] : "";
+  return normalizeFlag(firstLoginValue) || normalizeFlag(mustChangeValue);
+}
+
 // 🔐 LOGIN - UNIFIED FUNCTION
 function login(email, password) {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Users");
-  const rows = sheet.getDataRange().getValues();
+  const meta = getUsersSheetMeta();
+  const rows = meta.rows;
+  const indexes = {
+    email: getHeaderIndex(meta.headerLookup, ["email", "user", "username"], 0),
+    password: getHeaderIndex(meta.headerLookup, ["password"], 1),
+    role: getHeaderIndex(meta.headerLookup, ["role"], 2),
+    fullname: getHeaderIndex(meta.headerLookup, ["fullname", "full name", "name"], 3),
+    position: getHeaderIndex(meta.headerLookup, ["position"], 4),
+    branchid: getHeaderIndex(meta.headerLookup, ["branchid", "branch id"], 5),
+    firstLogin: getHeaderIndex(meta.headerLookup, ["firstlogin", "first login"], -1),
+    mustChangePassword: getHeaderIndex(meta.headerLookup, ["mustchangepassword", "must change password"], -1)
+  };
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const normalizedPassword = String(password).trim();
 
   for (let i = 1; i < rows.length; i++) {
-    const sheetEmail = String(rows[i][0]).trim().toLowerCase();
-    const sheetPassword = String(rows[i][1]).trim();
+    const row = rows[i];
+    const sheetEmail = String(row[indexes.email] || "").trim().toLowerCase();
+    const sheetPassword = String(row[indexes.password] || "").trim();
 
     if (sheetEmail === normalizedEmail && sheetPassword === normalizedPassword) {
       return {
         success: true,
-        role: rows[i][2],
+        role: row[indexes.role],
         user: sheetEmail,
-        branchid: rows[i][5] || "",  // Column F (index 5) contains branchid
-        fullname: rows[i][3] || "",
-        position: rows[i][4] || ""
+        branchid: row[indexes.branchid] || "",
+        fullname: row[indexes.fullname] || "",
+        position: row[indexes.position] || "",
+        mustChangePassword: isFirstLoginUser(row, indexes)
       };
     }
   }
@@ -48,6 +103,7 @@ function doPost(e) {
     let result;
 
     if (action === "login") result = login(data.email, data.password);
+    else if (action === "changePassword") result = changePassword(data);
     else if (action === "forgotPassword") result = forgotPassword(data.email);
     else if (action === "createRequest") result = createRequest(data);
     else if (action === "getRequests") result = getRequests(data);
@@ -69,19 +125,76 @@ function doPost(e) {
   }
 }
 
+function changePassword(data) {
+  const email = String(data.email || "").trim().toLowerCase();
+  const currentPassword = String(data.currentPassword || "").trim();
+  const newPassword = String(data.newPassword || "").trim();
+
+  if (!email || !currentPassword || !newPassword) {
+    return { success: false, message: "Email, current password, and new password are required." };
+  }
+
+  if (newPassword.length < 8) {
+    return { success: false, message: "New password must be at least 8 characters long." };
+  }
+
+  if (newPassword === currentPassword) {
+    return { success: false, message: "New password must be different from the current password." };
+  }
+
+  const meta = getUsersSheetMeta();
+  const indexes = {
+    email: getHeaderIndex(meta.headerLookup, ["email", "user", "username"], 0),
+    password: getHeaderIndex(meta.headerLookup, ["password"], 1),
+    firstLogin: getHeaderIndex(meta.headerLookup, ["firstlogin", "first login"], -1),
+    mustChangePassword: getHeaderIndex(meta.headerLookup, ["mustchangepassword", "must change password"], -1)
+  };
+
+  for (let i = 1; i < meta.rows.length; i++) {
+    const row = meta.rows[i];
+    const sheetEmail = String(row[indexes.email] || "").trim().toLowerCase();
+    const sheetPassword = String(row[indexes.password] || "").trim();
+
+    if (sheetEmail === email) {
+      if (sheetPassword !== currentPassword) {
+        return { success: false, message: "Current password is incorrect." };
+      }
+
+      meta.sheet.getRange(i + 1, indexes.password + 1).setValue(newPassword);
+
+      if (indexes.firstLogin >= 0) {
+        meta.sheet.getRange(i + 1, indexes.firstLogin + 1).setValue(false);
+      }
+
+      if (indexes.mustChangePassword >= 0) {
+        meta.sheet.getRange(i + 1, indexes.mustChangePassword + 1).setValue(false);
+      }
+
+      return { success: true, message: "Password updated successfully." };
+    }
+  }
+
+  return { success: false, message: "User account not found." };
+}
+
 function forgotPassword(email) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) {
     return { success: false, message: "Email is required." };
   }
 
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Users");
-  const rows = sheet.getDataRange().getValues();
+  const meta = getUsersSheetMeta();
+  const rows = meta.rows;
+  const indexes = {
+    email: getHeaderIndex(meta.headerLookup, ["email", "user", "username"], 0),
+    password: getHeaderIndex(meta.headerLookup, ["password"], 1),
+    fullname: getHeaderIndex(meta.headerLookup, ["fullname", "full name", "name"], 3)
+  };
 
   for (let i = 1; i < rows.length; i++) {
-    const sheetEmail = String(rows[i][0] || "").trim().toLowerCase();
-    const sheetPassword = String(rows[i][1] || "").trim();
-    const fullname = String(rows[i][3] || "User").trim();
+    const sheetEmail = String(rows[i][indexes.email] || "").trim().toLowerCase();
+    const sheetPassword = String(rows[i][indexes.password] || "").trim();
+    const fullname = String(rows[i][indexes.fullname] || "User").trim();
 
     if (sheetEmail === normalizedEmail) {
       MailApp.sendEmail(
