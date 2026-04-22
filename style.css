@@ -4,6 +4,65 @@ body {
   background: #f5f7fb;
 }
 
+body.login-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 89% 52%, rgba(255, 255, 255, 0.6) 0, rgba(255, 255, 255, 0.18) 2.5%, rgba(255, 255, 255, 0.08) 5%, rgba(255, 255, 255, 0) 10%),
+    radial-gradient(circle at 76% 81%, rgba(181, 194, 255, 0.28) 0 8%, rgba(52, 63, 182, 0.18) 8.5% 11%, rgba(255, 255, 255, 0.08) 11.5% 15%, rgba(44, 56, 191, 0.2) 15.5% 18%, rgba(255, 255, 255, 0) 18.5%),
+    radial-gradient(circle at 94% 68%, rgba(118, 125, 255, 0.28) 0 1.8%, rgba(255, 255, 255, 0) 2.1%),
+    linear-gradient(130deg, #010106 0%, #08071a 24%, #17174e 58%, #3430b8 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+  position: relative;
+  overflow: hidden;
+}
+
+body.login-page::before,
+body.login-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body.login-page::before {
+  background:
+    radial-gradient(circle at 3% 2%, rgba(214, 165, 84, 0.8) 0 1px, transparent 2px),
+    radial-gradient(circle at 5% 4%, rgba(214, 165, 84, 0.4) 0 2px, transparent 3px),
+    radial-gradient(circle at 7% 1%, rgba(214, 165, 84, 0.45) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 9% 6%, rgba(214, 165, 84, 0.25) 0 1px, transparent 2px),
+    radial-gradient(circle at 12% 3%, rgba(214, 165, 84, 0.45) 0 2px, transparent 3px),
+    radial-gradient(circle at 14% 8%, rgba(214, 165, 84, 0.22) 0 1px, transparent 2px),
+    radial-gradient(circle at 17% 5%, rgba(214, 165, 84, 0.35) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 20% 2%, rgba(214, 165, 84, 0.55) 0 2px, transparent 3px),
+    radial-gradient(circle at 23% 7%, rgba(214, 165, 84, 0.28) 0 1px, transparent 2px),
+    radial-gradient(circle at 26% 4%, rgba(214, 165, 84, 0.4) 0 2px, transparent 3px),
+    radial-gradient(circle at 30% 2%, rgba(214, 165, 84, 0.3) 0 1px, transparent 2px),
+    radial-gradient(circle at 34% 7%, rgba(214, 165, 84, 0.42) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 38% 3%, rgba(214, 165, 84, 0.22) 0 1px, transparent 2px),
+    radial-gradient(circle at 42% 6%, rgba(214, 165, 84, 0.36) 0 2px, transparent 3px),
+    radial-gradient(circle at 47% 2%, rgba(214, 165, 84, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 52% 8%, rgba(214, 165, 84, 0.32) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 58% 3%, rgba(214, 165, 84, 0.24) 0 1px, transparent 2px),
+    radial-gradient(circle at 63% 7%, rgba(214, 165, 84, 0.28) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 69% 4%, rgba(214, 165, 84, 0.2) 0 1px, transparent 2px);
+  opacity: 0.95;
+}
+
+body.login-page::after {
+  background:
+    radial-gradient(circle at 89% 52%, rgba(255, 255, 255, 0.85) 0 0.35%, rgba(255, 255, 255, 0.2) 0.8%, rgba(255, 255, 255, 0) 3%),
+    linear-gradient(45deg, transparent 49.7%, rgba(255, 255, 255, 0.42) 50%, transparent 50.3%),
+    linear-gradient(-45deg, transparent 49.7%, rgba(255, 255, 255, 0.42) 50%, transparent 50.3%),
+    linear-gradient(90deg, transparent 49.85%, rgba(255, 255, 255, 0.16) 50%, transparent 50.15%),
+    linear-gradient(transparent 49.85%, rgba(255, 255, 255, 0.16) 50%, transparent 50.15%);
+  background-size: 100% 100%, 13% 13%, 13% 13%, 9% 9%, 9% 9%;
+  background-position: center center, 89% 52%, 89% 52%, 89% 52%, 89% 52%;
+  background-repeat: no-repeat;
+  opacity: 0.9;
+}
+
 /* LAYOUT */
 .container {
   display: flex;
@@ -664,15 +723,18 @@ tbody tr:last-child td {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .login-card {
   width: 380px;
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
   padding: 40px;
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(4px);
 }
 
 .login-card h2 {
