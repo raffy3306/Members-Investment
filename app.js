@@ -1018,7 +1018,7 @@ function navigateToAdmin(section) {
 
   if (section === 'requests') {
     if (headerTitle) headerTitle.innerText = '💜 Admin Dashboard';
-    if (subtitle) subtitle.innerText = 'April 2026 · Review system requests, settings, and approval metrics';
+    if (subtitle) subtitle.innerText = 'Review system requests, settings, and approval metrics';
     loadAdminTable();
     loadAdminCounts();
     showSection('requests');
