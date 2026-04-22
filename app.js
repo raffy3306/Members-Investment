@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbyciaocilzO8_hnrUArU22HnhgsV0BytNu-0ksCtsfJcw8NLiU8LtE8hIh_Rhwu8Xdw/exec";
+const API = "https://script.google.com/macros/s/AKfycbxUjhB2I_jtW9siDHbkknN2ujdV23gEhdooozpMF0i_BKr9GFymjr1XXAVkJrn0cLnN/exec";
 
 // 🔐 LOGIN
 async function login() {
@@ -39,6 +39,60 @@ async function login() {
       alert("Invalid email or password");
     }
 
+  } catch (err) {
+    console.error(err);
+    alert("Connection error. Check your API URL.");
+  }
+}
+
+function openForgotPasswordModal(event) {
+  if (event) event.preventDefault();
+
+  const modal = document.getElementById("forgotPasswordModal");
+  const loginEmail = document.getElementById("email");
+  const resetEmail = document.getElementById("forgotPasswordEmail");
+
+  if (resetEmail && loginEmail && loginEmail.value.trim()) {
+    resetEmail.value = loginEmail.value.trim();
+  }
+
+  if (modal) {
+    modal.classList.add("active");
+  }
+}
+
+function closeForgotPasswordModal() {
+  const modal = document.getElementById("forgotPasswordModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
+}
+
+async function requestPasswordReset() {
+  const emailInput = document.getElementById("forgotPasswordEmail");
+  const email = emailInput ? emailInput.value.trim() : "";
+
+  if (!email) {
+    alert("Please enter your email address.");
+    return;
+  }
+
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "forgotPassword",
+        email: email
+      })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      alert("Password reset instructions have been sent to your email.");
+      closeForgotPasswordModal();
+    } else {
+      alert(data.message || "Unable to process your request.");
+    }
   } catch (err) {
     console.error(err);
     alert("Connection error. Check your API URL.");

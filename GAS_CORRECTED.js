@@ -48,6 +48,7 @@ function doPost(e) {
     let result;
 
     if (action === "login") result = login(data.email, data.password);
+    else if (action === "forgotPassword") result = forgotPassword(data.email);
     else if (action === "createRequest") result = createRequest(data);
     else if (action === "getRequests") result = getRequests(data);
     else if (action === "updateStatus") result = updateStatus(data);
@@ -66,6 +67,38 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ success: false, message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function forgotPassword(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { success: false, message: "Email is required." };
+  }
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Users");
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    const sheetEmail = String(rows[i][0] || "").trim().toLowerCase();
+    const sheetPassword = String(rows[i][1] || "").trim();
+    const fullname = String(rows[i][3] || "User").trim();
+
+    if (sheetEmail === normalizedEmail) {
+      GmailApp.sendEmail(
+        normalizedEmail,
+        "Investment Withdrawal System Password Recovery",
+        "Hello " + fullname + ",\n\n" +
+        "You requested help signing in to the Investment Withdrawal System.\n\n" +
+        "Your current password is: " + sheetPassword + "\n\n" +
+        "Please sign in and change it with your administrator if needed.\n\n" +
+        "If you did not request this email, please ignore it."
+      );
+
+      return { success: true };
+    }
+  }
+
+  return { success: false, message: "No account was found for that email address." };
 }
 
 // ➕ CREATE REQUEST

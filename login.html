@@ -23,11 +23,33 @@
 
     <div class="login-options">
       <label><input type="checkbox"> Keep me signed in</label>
-      <a href="#">Forgot password?</a>
+      <a href="#" onclick="openForgotPasswordModal(event)">Forgot password?</a>
     </div>
 
     <button class="btn blue" onclick="login()">Sign In →</button>
 
+  </div>
+</div>
+
+<div id="forgotPasswordModal" class="modal">
+  <div class="modal-content" style="width: 420px;">
+    <div class="modal-header">
+      <h3>Reset Password</h3>
+      <button class="modal-close" onclick="closeForgotPasswordModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="forgotPasswordEmail">Email Address</label>
+        <input id="forgotPasswordEmail" class="form-control" type="email" placeholder="you@email.com">
+      </div>
+      <p style="margin: 0; font-size: 13px; color: #6b7280;">
+        Enter your account email and we will send password recovery instructions.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeForgotPasswordModal()">Cancel</button>
+      <button class="btn blue" onclick="requestPasswordReset()">Send Reset Email</button>
+    </div>
   </div>
 </div>
 
