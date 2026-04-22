@@ -528,6 +528,12 @@ async function printRequest() {
   const tellerSignature = settings.tellerSignatureData || "";
   const branchSignature = settings.branchManagerSignatureData || "";
   const financeSignature = settings.financeManagerSignatureData || "";
+  const memberName = r[1] || "N/A";
+  const contactNumber = r[11] || "N/A";
+  const reason = r[5] || "N/A";
+  const totalAmount = `&#8369;${parseFloat(r[2] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const withdrawnAmount = `&#8369;${parseFloat(r[3] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const balanceAmount = `&#8369;${parseFloat(r[4] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   console.log('Settings loaded for print:', settings);
   console.log('Header image src:', headerImageSrc, 'length:', headerImageSrc.length);
@@ -538,44 +544,52 @@ async function printRequest() {
 
   printWindow.document.write(`<html><head><title>Investment Withdrawal Form ${r[0]}</title>`);
   printWindow.document.write(`<style>
-      body{font-family: Arial, sans-serif; margin:0; padding:30px 15px; color:#111; background:#fff;}
-      .page{max-width:850px; margin:0 auto;}
-      .header{text-align:center; margin-bottom:20px;}
-      .header img{max-width:250px; height:auto; margin-bottom:12px; display:block; margin:0 auto 12px auto;}
-      .header h1{margin:0; font-size:20px; letter-spacing:1px; font-weight:bold;}
-      .form-section{margin-bottom:15px;}
-      .row{display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:12px;}
-      .row.full{grid-template-columns:1fr;}
-      .form-group{display:flex; flex-direction:column;}
-      .label{font-size:10px; text-transform:uppercase; color:#666; margin-bottom:4px; font-weight:600; letter-spacing:0.5px;}
-      .value{font-size:13px; color:#111; padding:8px 10px; border:1px solid #ccc; border-radius:3px; background:#fafafa; min-height:32px; display:flex; align-items:center;}
-      .summary{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:15px 0;}
-      .summary-item{text-align:center; padding:10px; border:1px solid #999; border-radius:3px;}
-      .summary-item .label{text-align:center; margin-bottom:5px; font-size:9px;}
-      .summary-item .amount{font-size:15px; font-weight:bold; color:#111;}
-      .reason-label{font-size:10px; text-transform:uppercase; color:#c41e3a; font-weight:600; margin:12px 0 6px 0; letter-spacing:0.5px;}
-      .reason-box{border:1px solid #ccc; padding:8px; min-height:50px; font-size:12px; border-radius:3px; background:#fafafa; overflow:hidden;}
-      .footer-note{font-size:10px; color:#666; margin:8px 0; line-height:1.4;}
-      .subscriber-name{text-align:right; margin:12px 0 20px 0; font-weight:bold; font-size:12px;}
-      .sig-section{margin-top:15px;}
-      .signatures{display:grid; grid-template-columns:1fr 1fr; gap:15px;}
-      .signatures.full{grid-template-columns:1fr;}
-      .signature-box{text-align:center;}
-      .signature-box.centered{max-width:300px; margin:0 auto;}
-      .sig-label{font-size:10px; text-transform:uppercase; color:#666; margin-bottom:20px; font-weight:600;}
-      .sig-line{border-top:1px solid #111; margin-bottom:5px; height:40px;}
-      .signatory-name{font-weight:bold; margin-top:3px; font-size:11px;}
-      .signatory-role{font-size:9px; color:#666; text-transform:uppercase; margin-top:1px; letter-spacing:0.5px;}
+      @page{size:A4 portrait; margin:18mm 16mm;}
+      *{box-sizing:border-box;}
+      body{font-family:Arial, sans-serif; margin:0; color:#111; background:#fff;}
+      .page{max-width:820px; margin:0 auto; padding:8px 6px 0;}
+      .header{text-align:center; margin-bottom:64px;}
+      .header img{max-width:320px; max-height:90px; height:auto; display:block; margin:0 auto 24px;}
+      .header h1{margin:0; font-size:26px; font-weight:700; letter-spacing:2px;}
+      .top-row{display:grid; grid-template-columns:1fr 280px; align-items:start; margin-bottom:46px;}
+      .date-group{display:grid; grid-template-columns:auto 1fr; align-items:start; column-gap:18px; justify-self:end; width:100%;}
+      .label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.4px; color:#666;}
+      .inline-label{padding-top:12px;}
+      .field-box{border:1px solid #cfcfcf; border-radius:4px; min-height:84px; padding:22px 16px; font-size:16px; display:flex; align-items:center;}
+      .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:26px; margin-bottom:42px;}
+      .field-group .label{display:block; margin-bottom:8px;}
+      .summary{display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; margin-bottom:24px;}
+      .summary-item{border:2px solid #aeb3b8; border-radius:4px; text-align:center; padding:18px 14px 16px;}
+      .summary-item .label{margin-bottom:8px; font-size:10px;}
+      .summary-item .amount{font-size:18px; font-weight:700; letter-spacing:0.2px;}
+      .reason-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#c73342; margin-bottom:10px;}
+      .reason-box{border:1px solid #cfcfcf; border-radius:4px; min-height:112px; padding:14px; font-size:15px; line-height:1.45; margin-bottom:18px;}
+      .footer-note{margin:0 0 48px; font-size:15px; line-height:1.4; color:#444;}
+      .subscriber-signature{display:flex; justify-content:flex-end; margin-bottom:88px;}
+      .subscriber-signature .signature-box{text-align:center; min-width:260px;}
+      .signature-image{display:block; max-width:170px; max-height:56px; margin:0 auto 6px;}
+      .signature-line{width:160px; height:44px; border-bottom:1px solid #444; margin:0 auto 6px;}
+      .signature-label{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#666; margin-bottom:64px;}
+      .signatory-name{font-size:15px; font-weight:700; text-transform:uppercase; line-height:1.2;}
+      .signatory-role{font-size:12px; text-transform:uppercase; letter-spacing:0.8px; color:#666;}
+      .signature-caption{font-size:11px; color:#444;}
+      .approval-section{margin-top:10px;}
+      .two-signatures{display:grid; grid-template-columns:1fr 1fr; gap:80px; margin-bottom:56px;}
+      .two-signatures .signature-box{text-align:center;}
+      .approved-signature{text-align:center; max-width:320px; margin:0 auto;}
+      @media print{
+        body{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+      }
   </style>`);
   printWindow.document.write(`</head><body><div class="page">`);
   printWindow.document.write(`<div class="header">${headerImageSrc ? `<img src="${headerImageSrc}" alt="Report Header" />` : ''}<h1>Investment Withdrawal Form</h1></div>`);
-  printWindow.document.write(`<div class="row"><div class="form-group"><div class="label">Subscriber's Name</div><div class="value">${r[1] || 'N/A'}</div></div><div class="form-group"><div class="label">Date</div><div class="value">${dateStr}</div></div></div>`);
-  printWindow.document.write(`<div class="row full"><div class="form-group"><div class="label">Contact Number</div><div class="value">${r[11] || 'N/A'}</div></div></div>`);
-  printWindow.document.write(`<div class="summary"><div class="summary-item"><div class="label">Total Investment</div><div class="amount">₱${parseFloat(r[2] || 0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div><div class="summary-item"><div class="label">Withdrawal</div><div class="amount">₱${parseFloat(r[3] || 0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div><div class="summary-item"><div class="label">Remaining Balance</div><div class="amount">₱${parseFloat(r[4] || 0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div></div>`);
-  printWindow.document.write(`<div class="reason-label">This is to request for withdrawal of my CATV/Internet investment for the reason:</div><div class="reason-box">${r[5] || 'N/A'}</div>`);
+  printWindow.document.write(`<div class="top-row"><div></div><div class="date-group"><div class="label inline-label">Date</div><div class="field-box">${dateStr}</div></div></div>`);
+  printWindow.document.write(`<div class="field-grid"><div class="field-group"><div class="label">Subscriber's Name</div><div class="field-box">${memberName}</div></div><div class="field-group"><div class="label">Contact Number</div><div class="field-box">${contactNumber}</div></div></div>`);
+  printWindow.document.write(`<div class="summary"><div class="summary-item"><div class="label">Total Investment</div><div class="amount">${totalAmount}</div></div><div class="summary-item"><div class="label">Withdrawal</div><div class="amount">${withdrawnAmount}</div></div><div class="summary-item"><div class="label">Remaining Balance</div><div class="amount">${balanceAmount}</div></div></div>`);
+  printWindow.document.write(`<div class="reason-label">This is to request for withdrawal of my CATV/Internet investment for the reason:</div><div class="reason-box">${reason}</div>`);
   printWindow.document.write(`<p class="footer-note">I understand that an amount of Php 3,000 should be retained as my maintaining investment balance.</p>`);
-  printWindow.document.write(`<div class="subscriber-name">${r[1] || 'SUBSCRIBER NAME'}<br><span style="font-size:9px; font-weight:normal;">Subscriber's Name & Signature</span></div>`);
-  printWindow.document.write(`<div class="sig-section"><div class="signatures"><div class="signature-box"><div class="sig-label">Prepared by</div><div class="signatory-name">${tellerName}</div><div class="signatory-role">Teller</div></div><div class="signature-box"><div class="sig-label">Noted by</div><div class="signatory-name">${branchManagerName}</div><div class="signatory-role">Branch Manager</div></div></div><div class="signatures full" style="margin-top:20px;"><div class="signature-box centered"><div class="sig-label">Approved by</div>${financeSignature ? `<img class="signature-img" src="${financeSignature}" alt="Signature" style="max-width:150px; max-height:40px; margin-bottom:5px;"/>` : '<div class="sig-line"></div>'}<div class="signatory-name">${financeManagerName}</div><div class="signatory-role">Savings and Credit Head</div></div></div></div>`);
+  printWindow.document.write(`<div class="subscriber-signature"><div class="signature-box"><div style="height:62px;"></div><div class="signatory-name">${memberName}</div><div class="signature-caption">Subscriber's Name & Signature</div></div></div>`);
+  printWindow.document.write(`<div class="approval-section"><div class="two-signatures"><div class="signature-box"><div class="signature-label">Prepared by</div>${tellerSignature ? `<img class="signature-image" src="${tellerSignature}" alt="Prepared by signature" />` : '<div class="signature-line"></div>'}<div class="signatory-name">${tellerName}</div><div class="signatory-role">Teller</div></div><div class="signature-box"><div class="signature-label">Noted by</div>${branchSignature ? `<img class="signature-image" src="${branchSignature}" alt="Noted by signature" />` : '<div class="signature-line"></div>'}<div class="signatory-name">${branchManagerName}</div><div class="signatory-role">Branch Manager</div></div></div><div class="approved-signature"><div class="signature-label">Approved by</div>${financeSignature ? `<img class="signature-image" src="${financeSignature}" alt="Approved by signature" />` : '<div class="signature-line"></div>'}<div class="signatory-name">${financeManagerName}</div><div class="signatory-role">Savings and Credit Head</div></div></div>`);
   printWindow.document.write(`</div></body></html>`);
   printWindow.document.close();
   setTimeout(() => {
