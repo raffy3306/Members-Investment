@@ -373,7 +373,9 @@ function openModal(id) {
   // Store current request ID for approval/rejection
   window.currentRequestId = id;
 
-  const dateStr = r[10] ? new Date(r[10]).toLocaleString() : "N/A";
+  const dateStr = r[10]
+    ? new Date(r[10]).toLocaleDateString()
+    : "N/A";
   const balance = parseFloat(r[4]) || 0;
   const total = parseFloat(r[2]) || 0;
   const withdrawn = parseFloat(r[3]) || 0;
@@ -519,7 +521,9 @@ async function printRequest() {
   const tellerName = r[7] || settings.tellerName || localStorage.getItem("fullname") || "Teller";
   const branchManagerName = r[8] || settings.branchManagerName || "Branch Manager";
   const financeManagerName = r[9] || settings.financeManagerName || "Savings and Credit Head";
-  const dateStr = r[10] ? new Date(r[10]).toLocaleString() : "N/A";
+  const dateStr = r[10]
+    ? new Date(r[10]).toLocaleDateString()
+    : "N/A";
 
   const tellerSignature = settings.tellerSignatureData || "";
   const branchSignature = settings.branchManagerSignatureData || "";
