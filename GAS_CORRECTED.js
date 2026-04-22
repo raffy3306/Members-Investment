@@ -106,6 +106,7 @@ function doPost(e) {
     else if (action === "changePassword") result = changePassword(data);
     else if (action === "forgotPassword") result = forgotPassword(data.email);
     else if (action === "createRequest") result = createRequest(data);
+    else if (action === "editRequest") result = editRequest(data);
     else if (action === "getRequests") result = getRequests(data);
     else if (action === "updateStatus") result = updateStatus(data);
     else if (action === "getDashboardCounts") result = getDashboardCounts();
@@ -240,7 +241,8 @@ function createRequest(data) {
     "",                 // ApprovedBy
     data.date || data.dateStamp || new Date().toLocaleDateString(),  // Date (legacy DateStamp fallback) in column K
     data.contactNumber,  // ContactNumber (column L = 11)
-    data.tellerBranchId || ""  // TellerBranchId (column M = 12)
+    data.tellerBranchId || "",  // TellerBranchId (column M = 12)
+    ""  // Notes (column N = 13)
   ]);
 
   return { success: true };
@@ -275,11 +277,56 @@ function updateStatus(data) {
       // Update DateStamp column (column K = 11)
       sheet.getRange(i + 1, 11).setValue(data.dateStamp || new Date().toLocaleString());
 
+      // Save branch manager notes in column N when provided.
+      if (typeof data.notes !== "undefined") {
+        sheet.getRange(i + 1, 14).setValue(data.notes || "");
+      }
+
       break;
     }
   }
 
   return { success: true };
+}
+
+function editRequest(data) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Withdrawals");
+  const rows = sheet.getDataRange().getValues();
+
+  const totalInvestment = Number(data.totalInvestment);
+  const amount = Number(data.amount);
+  const balance = totalInvestment - amount;
+
+  if (balance < 3000) {
+    return {
+      success: false,
+      message: "Remaining balance cannot go below â‚±3,000"
+    };
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === data.request_id) {
+      if (String(rows[i][6] || "").trim() !== "Returned") {
+        return { success: false, message: "Only returned requests can be edited." };
+      }
+
+      sheet.getRange(i + 1, 2).setValue(data.memberName || ""); // MemberName
+      sheet.getRange(i + 1, 3).setValue(totalInvestment); // TotalInvestment
+      sheet.getRange(i + 1, 4).setValue(amount); // AmountWithdrawn
+      sheet.getRange(i + 1, 5).setValue(balance); // Balance
+      sheet.getRange(i + 1, 6).setValue(data.purpose || ""); // Purpose
+      sheet.getRange(i + 1, 7).setValue("Pending"); // Status
+      sheet.getRange(i + 1, 9).setValue(""); // CheckedBy
+      sheet.getRange(i + 1, 10).setValue(""); // ApprovedBy
+      sheet.getRange(i + 1, 11).setValue(data.date || data.dateStamp || new Date().toLocaleString()); // DateStamp
+      sheet.getRange(i + 1, 12).setValue(data.contactNumber || ""); // ContactNumber
+      sheet.getRange(i + 1, 14).setValue(""); // Notes
+
+      return { success: true };
+    }
+  }
+
+  return { success: false, message: "Request not found." };
 }
 
 // 🔢 Generate ID

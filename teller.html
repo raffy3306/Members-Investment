@@ -212,7 +212,7 @@ if (localStorage.getItem("role") !== "teller") {
 <div class="modal" id="requestModal">
   <div class="modal-content modal-lg">
     <div class="modal-header">
-      <h3>New Withdrawal Request</h3>
+      <h3 id="requestModalTitle">New Withdrawal Request</h3>
       <button class="modal-close" onclick="closeRequestModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -251,7 +251,7 @@ if (localStorage.getItem("role") !== "teller") {
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeRequestModal()">Close</button>
-      <button class="btn blue" onclick="submitRequest()">Submit Request</button>
+      <button id="requestSubmitButton" class="btn blue" onclick="submitRequest()">Submit Request</button>
     </div>
   </div>
 </div>

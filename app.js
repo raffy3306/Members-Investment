@@ -1,6 +1,7 @@
-const API = "https://script.google.com/macros/s/AKfycbzTfgwDWCFFFUCRiRCejaO3SzXBY0Y56Fd1_Mc3e8-rGxMSC8AgBr7PQoXH_BbAbDs/exec";
+const API = "https://script.google.com/macros/s/AKfycbxbeqUN6cD5om1_d5zC3jQfntzlq9xIxW6GV_hbkuQecODHzfTgMU7foOy4DDdkBs3n/exec";
 
 let pendingLoginData = null;
+let editingRequestId = null;
 
 function getRoleLabel(role) {
   return role === "admin"
@@ -241,6 +242,7 @@ function setDashboardUserDetails() {
 
 function openRequestModal() {
   const modal = document.getElementById("requestModal");
+  resetRequestForm();
   if (modal) {
     modal.style.display = "flex";
   }
@@ -250,6 +252,71 @@ function closeRequestModal() {
   const modal = document.getElementById("requestModal");
   if (modal) {
     modal.style.display = "none";
+  }
+  resetRequestForm();
+}
+
+function resetRequestForm() {
+  editingRequestId = null;
+
+  const title = document.getElementById("requestModalTitle");
+  const submitButton = document.getElementById("requestSubmitButton");
+
+  if (title) title.innerText = "New Withdrawal Request";
+  if (submitButton) submitButton.innerText = "Submit Request";
+
+  const member = document.getElementById("requestMember");
+  const contact = document.getElementById("requestContact");
+  const total = document.getElementById("requestTotal");
+  const amount = document.getElementById("requestAmount");
+  const purpose = document.getElementById("requestPurpose");
+  const balance = document.getElementById("formBalance");
+
+  if (member) member.value = "";
+  if (contact) contact.value = "";
+  if (total) total.value = "";
+  if (amount) amount.value = "";
+  if (purpose) purpose.value = "";
+  if (balance) balance.textContent = "0.00";
+}
+
+function populateRequestForm(request) {
+  if (!Array.isArray(request)) return;
+
+  const title = document.getElementById("requestModalTitle");
+  const submitButton = document.getElementById("requestSubmitButton");
+  const member = document.getElementById("requestMember");
+  const contact = document.getElementById("requestContact");
+  const total = document.getElementById("requestTotal");
+  const amount = document.getElementById("requestAmount");
+  const purpose = document.getElementById("requestPurpose");
+  const balance = document.getElementById("formBalance");
+
+  editingRequestId = request[0];
+
+  if (title) title.innerText = "Edit Withdrawal Request";
+  if (submitButton) submitButton.innerText = "Save Changes";
+  if (member) member.value = request[1] || "";
+  if (contact) contact.value = request[11] || "";
+  if (total) total.value = request[2] || "";
+  if (amount) amount.value = request[3] || "";
+  if (purpose) purpose.value = request[5] || "";
+
+  const remainingBalance = (parseFloat(request[2]) || 0) - (parseFloat(request[3]) || 0);
+  if (balance) {
+    balance.textContent = Math.max(remainingBalance, 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+}
+
+function openEditRequest(requestId) {
+  const request = allRequests.find(x => Array.isArray(x) && x[0] === requestId);
+  if (!request || request[6] !== "Returned") return;
+
+  populateRequestForm(request);
+
+  const modal = document.getElementById("requestModal");
+  if (modal) {
+    modal.style.display = "flex";
   }
 }
 
@@ -290,9 +357,9 @@ async function loadRequests(tableId) {
 async function submitRequest() {
   const total = parseFloat(document.getElementById("requestTotal").value);
   const amount = parseFloat(document.getElementById("requestAmount").value);
-  const memberName = document.getElementById("requestMember").value;
-  const contactNumber = document.getElementById("requestContact").value;
-  const purpose = document.getElementById("requestPurpose").value;
+  const memberName = document.getElementById("requestMember").value.trim();
+  const contactNumber = document.getElementById("requestContact").value.trim();
+  const purpose = document.getElementById("requestPurpose").value.trim();
 
   if (!memberName) {
     alert("Member Name is required.");
@@ -304,15 +371,23 @@ async function submitRequest() {
     return;
   }
 
+  if (Number.isNaN(total) || Number.isNaN(amount)) {
+    alert("Please enter valid investment and withdrawal amounts.");
+    return;
+  }
+
   if ((total - amount) < 3000) {
     alert("Balance must not go below ₱3,000");
     return;
   }
 
+  const action = editingRequestId ? "editRequest" : "createRequest";
+
   await fetch(API, {
     method: "POST",
     body: JSON.stringify({
-      action: "createRequest",
+      action: action,
+      request_id: editingRequestId,
       memberName: memberName,
       totalInvestment: total,
       amount: amount,
@@ -325,7 +400,7 @@ async function submitRequest() {
     })
   });
 
-  alert("Submitted!");
+  alert(editingRequestId ? "Request updated and resubmitted for review." : "Submitted!");
   closeRequestModal();
   location.reload();
 }
@@ -335,6 +410,17 @@ async function updateStatus(id, status) {
   const role = localStorage.getItem("role");
   const fullname = localStorage.getItem("fullname");
   const email = localStorage.getItem("user");
+  let notes = "";
+
+  if (role === "branch_manager" && status === "Returned") {
+    notes = window.prompt("Enter notes for the teller before returning this request:", "") || "";
+    notes = notes.trim();
+
+    if (!notes) {
+      alert("Notes are required before returning a request to the teller.");
+      return;
+    }
+  }
   
   let updateData = {
     action: "updateStatus",
@@ -342,7 +428,7 @@ async function updateStatus(id, status) {
     status: status,
     role: role,
     dateStamp: new Date().toLocaleString(),
-    notes: ""
+    notes: notes
   };
   
   if (role === "branch_manager") {
@@ -369,6 +455,7 @@ function getStatusClass(status) {
   if (status === "Approved") return "badge approved";
   if (status === "Rejected") return "badge rejected";
   if (status === "Forwarded") return "badge review";
+  if (status === "Returned") return "badge rejected";
   return "badge";
 }
 
@@ -377,6 +464,15 @@ let allRequests = [];
 
 function normalizeValue(value) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function requestBelongsToBranch(request, branchId) {
@@ -496,6 +592,7 @@ function openModal(id) {
   const total = parseFloat(r[2]) || 0;
   const withdrawn = parseFloat(r[3]) || 0;
   const tellerName = r[7] || localStorage.getItem("fullname") || "Unknown";
+  const branchManagerNotes = r[13] || "";
 
   document.getElementById("modalContent").innerHTML = `
     <div style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
@@ -543,6 +640,12 @@ function openModal(id) {
       <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600;">Current Status:</label>
       <span class="${getStatusClass(r[6])}" style="padding: 4px 10px; border-radius: 20px; font-size: 12px;">${r[6]}</span>
     </div>
+    ${r[6] === "Returned" ? `
+      <div style="margin-top: 20px; padding: 16px; background: #fff4f4; border-left: 4px solid #dc2626; border-radius: 6px;">
+        <label style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">Branch Manager Notes</label>
+        <p style="margin: 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(branchManagerNotes || "No notes provided.")}</p>
+      </div>
+    ` : ""}
   `;
 
   // Show/hide buttons based on role and status
@@ -582,6 +685,18 @@ function openModal(id) {
         rejectBtn.style.display = "block";
         rejectBtn.className = "btn red";
       }
+    }
+
+    if (localStorage.getItem("role") === "teller" && r[6] === "Returned") {
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn blue role-action-btn";
+      editBtn.style.cssText = "margin-left: auto; margin-right: 10px;";
+      editBtn.textContent = "Edit Entry";
+      editBtn.onclick = () => {
+        closeModal();
+        openEditRequest(r[0]);
+      };
+      modalFooter.appendChild(editBtn);
     }
 
     if (localStorage.getItem("role") === "teller" && r[6] === "Approved") {
