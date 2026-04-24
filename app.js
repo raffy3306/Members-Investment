@@ -1,7 +1,9 @@
-const API = "https://script.google.com/macros/s/AKfycbzuM5k_3oP1-OgzJ7-BbmUIwyLQazPh7vWW9mh67ZsuVF7znn67Ie3RMZk42TGwFrcX/exec";
+const API = "https://script.google.com/macros/s/AKfycbwdQX-kEC9yVdcqkkhBE0BhQa6jR4C8SAVObdSvU6gqR9ota0AZqpxQ0GQu3axivNtD/exec";
 
 let pendingLoginData = null;
 let editingRequestId = null;
+let allUsers = [];
+let editingUserEmail = null;
 
 function getRoleLabel(role) {
   return role === "admin"
@@ -227,12 +229,15 @@ function logout() {
 
 function loadUserProfile() {
   const fullname = localStorage.getItem("fullname") || "Teller";
+  const email = localStorage.getItem("user") || "user@example.com";
   const position = localStorage.getItem("position") || "Teller";
 
   const fullNameEl = document.getElementById("userFullName");
+  const emailEl = document.getElementById("userEmail");
   const positionEl = document.getElementById("userPosition");
 
   if (fullNameEl) fullNameEl.innerText = fullname;
+  if (emailEl) emailEl.innerText = email;
   if (positionEl) positionEl.innerText = position;
 }
 
@@ -1255,6 +1260,10 @@ function exportData() {
   alert("Export feature coming soon!");
 }
 
+function formatFirstLoginFlag(value) {
+  return value ? "TRUE" : "FALSE";
+}
+
 function navigateToAdmin(section) {
   document.querySelectorAll('.sidebar-main .sidebar-btn').forEach(btn => btn.classList.remove('active'));
   const selectedButton = Array.from(document.querySelectorAll('.sidebar-main .sidebar-btn'))
@@ -1270,11 +1279,206 @@ function navigateToAdmin(section) {
     loadAdminTable();
     loadAdminCounts();
     showSection('requests');
+  } else if (section === 'users') {
+    if (headerTitle) headerTitle.innerText = 'User Management';
+    if (subtitle) subtitle.innerText = 'Add, review, and update system users.';
+    loadUsers();
+    showSection('users');
   } else if (section === 'settings') {
     if (headerTitle) headerTitle.innerText = '⚙️ Admin Settings';
     if (subtitle) subtitle.innerText = 'Manage signatory names and electronic signatures.';
     loadSettings();
     showSection('settings');
+  }
+}
+
+async function loadUsers() {
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'getUsers' })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      alert(data.message || 'Failed to load users.');
+      return;
+    }
+
+    allUsers = Array.isArray(data.users) ? data.users : [];
+    renderUsersTable(allUsers);
+  } catch (err) {
+    console.error('Failed to load users', err);
+    alert('Failed to load users.');
+  }
+}
+
+function renderUsersTable(users) {
+  const usersTable = document.getElementById('usersTable');
+  const userTableCount = document.getElementById('userTableCount');
+
+  if (!usersTable || !userTableCount) return;
+
+  if (!Array.isArray(users) || !users.length) {
+    usersTable.innerHTML = '<tr><td colspan="7">No users found.</td></tr>';
+    userTableCount.innerText = '0 users listed';
+    return;
+  }
+
+  let html = '';
+
+  users.forEach(user => {
+    const sourceIndex = allUsers.findIndex(item => item.email === user.email);
+    html += `
+      <tr>
+        <td>${escapeHtml(user.email)}</td>
+        <td>${escapeHtml(user.fullname)}</td>
+        <td>${escapeHtml(user.position)}</td>
+        <td>${escapeHtml(getRoleLabel(user.role))}</td>
+        <td>${escapeHtml(user.branchid || '-')}</td>
+        <td>${formatFirstLoginFlag(Boolean(user.firstLogin))}</td>
+        <td><button class="btn blue" onclick="openUserModal('edit', ${sourceIndex})">Edit</button></td>
+      </tr>
+    `;
+  });
+
+  usersTable.innerHTML = html;
+  userTableCount.innerText = `${users.length} users listed`;
+}
+
+function filterUsersTable() {
+  const searchText = (document.getElementById('userSearch')?.value || '').trim().toLowerCase();
+  const roleFilter = document.getElementById('userRoleFilter')?.value || 'All Roles';
+
+  const filtered = allUsers.filter(user => {
+    const rowText = `${user.email} ${user.fullname} ${user.position} ${user.branchid} ${user.role}`.toLowerCase();
+    const matchesSearch = !searchText || rowText.includes(searchText);
+    const matchesRole = roleFilter === 'All Roles' || user.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  renderUsersTable(filtered);
+}
+
+function resetUserForm() {
+  editingUserEmail = null;
+
+  const title = document.getElementById('userModalTitle');
+  const submitButton = document.getElementById('userSubmitButton');
+  const passwordHint = document.getElementById('userPasswordHint');
+  const emailInput = document.getElementById('userEmailInput');
+  const passwordInput = document.getElementById('userPasswordInput');
+  const fullnameInput = document.getElementById('userFullnameInput');
+  const positionInput = document.getElementById('userPositionInput');
+  const roleInput = document.getElementById('userRoleInput');
+  const branchInput = document.getElementById('userBranchInput');
+  const firstLoginInput = document.getElementById('userFirstLoginInput');
+
+  if (title) title.innerText = 'Add User';
+  if (submitButton) submitButton.innerText = 'Save User';
+  if (passwordHint) passwordHint.innerText = 'This will be required when creating a new account.';
+  if (emailInput) emailInput.value = '';
+  if (passwordInput) passwordInput.value = '';
+  if (fullnameInput) fullnameInput.value = '';
+  if (positionInput) positionInput.value = '';
+  if (roleInput) roleInput.value = 'teller';
+  if (branchInput) branchInput.value = '';
+  if (firstLoginInput) firstLoginInput.checked = true;
+}
+
+function openUserModal(mode = 'create', index = null) {
+  const modal = document.getElementById('userModal');
+  const title = document.getElementById('userModalTitle');
+  const submitButton = document.getElementById('userSubmitButton');
+  const passwordHint = document.getElementById('userPasswordHint');
+  const emailInput = document.getElementById('userEmailInput');
+  const passwordInput = document.getElementById('userPasswordInput');
+  const fullnameInput = document.getElementById('userFullnameInput');
+  const positionInput = document.getElementById('userPositionInput');
+  const roleInput = document.getElementById('userRoleInput');
+  const branchInput = document.getElementById('userBranchInput');
+  const firstLoginInput = document.getElementById('userFirstLoginInput');
+
+  resetUserForm();
+
+  if (mode === 'edit' && index != null) {
+    const user = allUsers[index];
+    if (!user) {
+      alert('User not found.');
+      return;
+    }
+
+    editingUserEmail = user.email;
+
+    if (title) title.innerText = 'Edit User';
+    if (submitButton) submitButton.innerText = 'Update User';
+    if (passwordHint) passwordHint.innerText = 'Leave this blank to keep the current password.';
+    if (emailInput) emailInput.value = user.email || '';
+    if (passwordInput) passwordInput.value = '';
+    if (fullnameInput) fullnameInput.value = user.fullname || '';
+    if (positionInput) positionInput.value = user.position || '';
+    if (roleInput) roleInput.value = user.role || 'teller';
+    if (branchInput) branchInput.value = user.branchid || '';
+    if (firstLoginInput) firstLoginInput.checked = Boolean(user.firstLogin);
+  }
+
+  if (modal) modal.classList.add('active');
+}
+
+function closeUserModal() {
+  const modal = document.getElementById('userModal');
+  if (modal) modal.classList.remove('active');
+  resetUserForm();
+}
+
+async function submitUserForm() {
+  const email = document.getElementById('userEmailInput')?.value.trim().toLowerCase() || '';
+  const password = document.getElementById('userPasswordInput')?.value || '';
+  const fullname = document.getElementById('userFullnameInput')?.value.trim() || '';
+  const position = document.getElementById('userPositionInput')?.value.trim() || '';
+  const role = document.getElementById('userRoleInput')?.value || '';
+  const branchid = document.getElementById('userBranchInput')?.value.trim() || '';
+  const firstLogin = Boolean(document.getElementById('userFirstLoginInput')?.checked);
+  const isEditing = Boolean(editingUserEmail);
+
+  if (!email || !fullname || !position || !role) {
+    alert('Please complete email, fullname, position, and role.');
+    return;
+  }
+
+  if (!isEditing && !password) {
+    alert('Please enter a default password.');
+    return;
+  }
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: isEditing ? 'updateUser' : 'createUser',
+        originalEmail: editingUserEmail,
+        email,
+        password,
+        fullname,
+        position,
+        role,
+        branchid,
+        firstLogin
+      })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      alert(data.message || 'Failed to save user.');
+      return;
+    }
+
+    alert(isEditing ? 'User updated successfully.' : 'User created successfully.');
+    closeUserModal();
+    loadUsers();
+  } catch (err) {
+    console.error('Failed to save user', err);
+    alert('Failed to save user.');
   }
 }
 

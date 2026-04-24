@@ -113,6 +113,9 @@ function doPost(e) {
     else if (action === "getSettings") result = getSettings();
     else if (action === "saveSettings") result = saveSettings(data.settings);
     else if (action === "saveSignature") result = saveSignature(data);
+    else if (action === "getUsers") result = getUsers();
+    else if (action === "createUser") result = createUser(data);
+    else if (action === "updateUser") result = updateUser(data);
     else if (action === "getMembers") result = getMembers();
     else result = { success: false, message: "Unknown action: " + String(action) };
 
@@ -216,6 +219,154 @@ function forgotPassword(email) {
 }
 
 // ➕ CREATE REQUEST
+function getUserIndexes(meta) {
+  return {
+    email: getHeaderIndex(meta.headerLookup, ["email", "user", "username"], 0),
+    password: getHeaderIndex(meta.headerLookup, ["password"], 1),
+    role: getHeaderIndex(meta.headerLookup, ["role"], 2),
+    fullname: getHeaderIndex(meta.headerLookup, ["fullname", "full name", "name"], 3),
+    position: getHeaderIndex(meta.headerLookup, ["position"], 4),
+    branchid: getHeaderIndex(meta.headerLookup, ["branchid", "branch id"], 5),
+    firstLogin: getHeaderIndex(meta.headerLookup, ["firstlogin", "first login"], -1),
+    mustChangePassword: getHeaderIndex(meta.headerLookup, ["mustchangepassword", "must change password"], -1)
+  };
+}
+
+function getUsers() {
+  try {
+    const meta = getUsersSheetMeta();
+    const indexes = getUserIndexes(meta);
+    const users = [];
+
+    for (let i = 1; i < meta.rows.length; i++) {
+      const row = meta.rows[i];
+      const email = String(row[indexes.email] || "").trim().toLowerCase();
+
+      if (!email) continue;
+
+      users.push({
+        email: email,
+        role: String(row[indexes.role] || "").trim(),
+        fullname: String(row[indexes.fullname] || "").trim(),
+        position: String(row[indexes.position] || "").trim(),
+        branchid: String(row[indexes.branchid] || "").trim(),
+        firstLogin: isFirstLoginUser(row, indexes)
+      });
+    }
+
+    return { success: true, users: users };
+  } catch (err) {
+    return { success: false, message: "Error fetching users: " + err.toString() };
+  }
+}
+
+function createUser(data) {
+  try {
+    const meta = getUsersSheetMeta();
+    const indexes = getUserIndexes(meta);
+    const email = String(data.email || "").trim().toLowerCase();
+    const password = String(data.password || "").trim();
+    const role = String(data.role || "").trim();
+    const fullname = String(data.fullname || "").trim();
+    const position = String(data.position || "").trim();
+    const branchid = String(data.branchid || "").trim();
+    const firstLogin = typeof data.firstLogin === "boolean" ? data.firstLogin : true;
+
+    if (!email || !password || !role || !fullname || !position) {
+      return { success: false, message: "Email, password, role, fullname, and position are required." };
+    }
+
+    for (let i = 1; i < meta.rows.length; i++) {
+      const existingEmail = String(meta.rows[i][indexes.email] || "").trim().toLowerCase();
+      if (existingEmail === email) {
+        return { success: false, message: "A user with this email already exists." };
+      }
+    }
+
+    const rowLength = Math.max(meta.headers.length, indexes.mustChangePassword + 1, indexes.firstLogin + 1, indexes.branchid + 1, 6);
+    const newRow = new Array(rowLength).fill("");
+
+    newRow[indexes.email] = email;
+    newRow[indexes.password] = password;
+    newRow[indexes.role] = role;
+    newRow[indexes.fullname] = fullname;
+    newRow[indexes.position] = position;
+    newRow[indexes.branchid] = branchid;
+
+    if (indexes.firstLogin >= 0) {
+      newRow[indexes.firstLogin] = firstLogin;
+    }
+
+    if (indexes.mustChangePassword >= 0) {
+      newRow[indexes.mustChangePassword] = firstLogin;
+    }
+
+    meta.sheet.appendRow(newRow);
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: "Error creating user: " + err.toString() };
+  }
+}
+
+function updateUser(data) {
+  try {
+    const meta = getUsersSheetMeta();
+    const indexes = getUserIndexes(meta);
+    const originalEmail = String(data.originalEmail || "").trim().toLowerCase();
+    const email = String(data.email || "").trim().toLowerCase();
+    const password = String(data.password || "").trim();
+    const role = String(data.role || "").trim();
+    const fullname = String(data.fullname || "").trim();
+    const position = String(data.position || "").trim();
+    const branchid = String(data.branchid || "").trim();
+    const firstLogin = typeof data.firstLogin === "boolean" ? data.firstLogin : true;
+
+    if (!originalEmail || !email || !role || !fullname || !position) {
+      return { success: false, message: "Original email, email, role, fullname, and position are required." };
+    }
+
+    let rowNumber = -1;
+
+    for (let i = 1; i < meta.rows.length; i++) {
+      const existingEmail = String(meta.rows[i][indexes.email] || "").trim().toLowerCase();
+
+      if (existingEmail === email && existingEmail !== originalEmail) {
+        return { success: false, message: "Another user already uses this email address." };
+      }
+
+      if (existingEmail === originalEmail) {
+        rowNumber = i + 1;
+      }
+    }
+
+    if (rowNumber < 0) {
+      return { success: false, message: "User account not found." };
+    }
+
+    meta.sheet.getRange(rowNumber, indexes.email + 1).setValue(email);
+    meta.sheet.getRange(rowNumber, indexes.role + 1).setValue(role);
+    meta.sheet.getRange(rowNumber, indexes.fullname + 1).setValue(fullname);
+    meta.sheet.getRange(rowNumber, indexes.position + 1).setValue(position);
+    meta.sheet.getRange(rowNumber, indexes.branchid + 1).setValue(branchid);
+
+    if (password) {
+      meta.sheet.getRange(rowNumber, indexes.password + 1).setValue(password);
+    }
+
+    if (indexes.firstLogin >= 0) {
+      meta.sheet.getRange(rowNumber, indexes.firstLogin + 1).setValue(firstLogin);
+    }
+
+    if (indexes.mustChangePassword >= 0) {
+      meta.sheet.getRange(rowNumber, indexes.mustChangePassword + 1).setValue(firstLogin);
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: "Error updating user: " + err.toString() };
+  }
+}
+
 function createRequest(data) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Withdrawals");
 

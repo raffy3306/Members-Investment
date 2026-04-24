@@ -24,21 +24,24 @@ if (localStorage.getItem("role") !== "admin") {
     </div>
 
     <div class="sidebar-role">
-      <span class="role-badge" style="background: rgba(168, 85, 247, 0.2); color: #a855f7;">💜 Admin</span>
+      <span class="role-badge" style="background: rgba(168, 85, 247, 0.2); color: #a855f7;">Admin</span>
     </div>
 
     <div class="sidebar-main">
       <button class="sidebar-btn active" onclick="navigateToAdmin('requests')">
-        <span class="icon">📋</span> All Requests
+        <span class="icon">Requests</span> All Requests
+      </button>
+      <button class="sidebar-btn" onclick="navigateToAdmin('users')">
+        <span class="icon">Users</span> Users
       </button>
       <button class="sidebar-btn" onclick="navigateToAdmin('settings')">
-        <span class="icon">⚙️</span> Settings
+        <span class="icon">Settings</span> Settings
       </button>
     </div>
 
     <div class="sidebar-bottom">
       <button class="sidebar-btn" onclick="logout()">
-        <span class="icon">🚪</span> Sign Out
+        <span class="icon">Exit</span> Sign Out
       </button>
       <div class="sidebar-user">
         <div class="user-fullname" id="userFullName">Admin User</div>
@@ -52,36 +55,36 @@ if (localStorage.getItem("role") !== "admin") {
   <div class="main">
     <div class="main-header">
       <div class="header-content">
-        <h1>💜 Admin Dashboard</h1>
+        <h1>Admin Dashboard</h1>
         <p class="subtitle">Review system requests, settings, and approval metrics</p>
       </div>
       <div class="header-actions">
-        <button class="btn blue" onclick="location.reload()">🔄 Refresh</button>
-        <button class="btn blue" onclick="exportData()">📥 Export</button>
+        <button class="btn blue" onclick="location.reload()">Refresh</button>
+        <button class="btn blue" onclick="exportData()">Export</button>
       </div>
     </div>
 
-    <div class="cards">
+    <div class="cards" id="adminCards">
       <div class="card">
-        <div class="card-icon approved">✓</div>
+        <div class="card-icon approved">OK</div>
         <h3>Total Requests</h3>
         <p id="adminTotal" class="card-number">0</p>
       </div>
 
       <div class="card">
-        <div class="card-icon awaiting">⏳</div>
+        <div class="card-icon awaiting">...</div>
         <h3>Pending</h3>
         <p id="adminPending" class="card-number awaiting-color">0</p>
       </div>
 
       <div class="card">
-        <div class="card-icon flagged">⚡</div>
+        <div class="card-icon flagged">!</div>
         <h3>Forwarded</h3>
         <p id="adminForwarded" class="card-number approved-color">0</p>
       </div>
 
       <div class="card">
-        <div class="card-icon rejected">✕</div>
+        <div class="card-icon rejected">X</div>
         <h3>Approved</h3>
         <p id="adminApproved" class="card-number">0</p>
       </div>
@@ -126,6 +129,43 @@ if (localStorage.getItem("role") !== "admin") {
       </div>
     </div>
 
+    <div id="usersSection" style="display: none;">
+      <div class="table-container">
+        <div class="table-header">
+          <div>
+            <h3>User Management</h3>
+            <p class="table-count" id="userTableCount">0 users listed</p>
+          </div>
+          <div class="table-controls">
+            <input type="text" placeholder="Search email, name, branch..." class="search-input" id="userSearch" oninput="filterUsersTable()">
+            <select class="status-filter" id="userRoleFilter" onchange="filterUsersTable()">
+              <option value="All Roles">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="branch_manager">Branch Manager</option>
+              <option value="finance_manager">Savings and Credit Head</option>
+              <option value="teller">Teller</option>
+            </select>
+            <button class="btn blue" onclick="openUserModal()">Add User</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>EMAIL</th>
+              <th>FULL NAME</th>
+              <th>POSITION</th>
+              <th>ROLE</th>
+              <th>BRANCH ID</th>
+              <th>FIRST LOGIN</th>
+              <th>ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="usersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div id="settingsSection" style="display: none;">
       <h3>Signatory Settings</h3>
       <div class="card" style="padding: 20px;">
@@ -165,7 +205,7 @@ if (localStorage.getItem("role") !== "admin") {
           <input id="financeSignatureFile" type="file" accept="image/*">
           <button class="btn blue" onclick="uploadSignature('financeManager')">Upload Signature</button>
           <button class="btn red" onclick="clearSignature('financeManager')">Clear Signature</button>
-          <img id="financeSignaturePreview" class="signature-preview" alt="Savings and Credit Headdit Head Signature Preview">
+          <img id="financeSignaturePreview" class="signature-preview" alt="Savings and Credit Head Signature Preview">
         </div>
       </div>
 
@@ -185,18 +225,76 @@ if (localStorage.getItem("role") !== "admin") {
   </div>
 </div>
 
-<!-- MODAL -->
+<!-- REQUEST DETAILS MODAL -->
 <div class="modal" id="modal">
   <div class="modal-content modal-lg">
     <div class="modal-header">
       <h3>Request Details</h3>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <button class="modal-close" onclick="closeModal()">X</button>
     </div>
     <div class="modal-body">
       <div id="modalContent"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div class="modal" id="userModal">
+  <div class="modal-content modal-lg">
+    <div class="modal-header">
+      <h3 id="userModalTitle">Add User</h3>
+      <button class="modal-close" onclick="closeUserModal()">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="userEmailInput">Email Address</label>
+        <input id="userEmailInput" class="form-control" type="email" placeholder="name@example.com">
+      </div>
+
+      <div class="form-group">
+        <label for="userPasswordInput">Default Password</label>
+        <input id="userPasswordInput" class="form-control" type="password" placeholder="Enter default password">
+        <small id="userPasswordHint" class="form-hint">This will be required when creating a new account.</small>
+      </div>
+
+      <div class="form-group">
+        <label for="userFullnameInput">Full Name</label>
+        <input id="userFullnameInput" class="form-control" type="text" placeholder="Enter full name">
+      </div>
+
+      <div class="form-group">
+        <label for="userPositionInput">Position</label>
+        <input id="userPositionInput" class="form-control" type="text" placeholder="Enter position">
+      </div>
+
+      <div class="form-group">
+        <label for="userRoleInput">Role</label>
+        <select id="userRoleInput" class="form-control">
+          <option value="admin">Admin</option>
+          <option value="branch_manager">Branch Manager</option>
+          <option value="finance_manager">Savings and Credit Head</option>
+          <option value="teller">Teller</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="userBranchInput">Branch ID</label>
+        <input id="userBranchInput" class="form-control" type="text" placeholder="Enter branch ID">
+      </div>
+
+      <div class="form-group form-checkbox">
+        <label class="checkbox-label">
+          <input id="userFirstLoginInput" type="checkbox" checked>
+          <span>FirstLogin</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeUserModal()">Cancel</button>
+      <button class="btn blue" id="userSubmitButton" onclick="submitUserForm()">Save User</button>
     </div>
   </div>
 </div>
@@ -210,7 +308,9 @@ setDashboardUserDetails();
 loadSettings();
 
 function showSection(section) {
+  document.getElementById('adminCards').style.display = section === 'requests' ? 'grid' : 'none';
   document.getElementById('requestsSection').style.display = section === 'requests' ? 'block' : 'none';
+  document.getElementById('usersSection').style.display = section === 'users' ? 'block' : 'none';
   document.getElementById('settingsSection').style.display = section === 'settings' ? 'block' : 'none';
 }
 </script>
