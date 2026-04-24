@@ -59,7 +59,10 @@ async function login() {
           email,
           currentPassword: password
         };
-        openFirstLoginPasswordModal(email);
+        const opened = openFirstLoginPasswordModal(email);
+        if (!opened) {
+          alert("This account must change its password before continuing, but the password update form is unavailable on this page. Please reload and try again.");
+        }
         return;
       }
 
@@ -82,14 +85,18 @@ function openFirstLoginPasswordModal(email) {
   const newPasswordInput = document.getElementById("newPassword");
   const confirmPasswordInput = document.getElementById("confirmPassword");
 
+  if (!modal) {
+    console.error("Missing first-login password modal in the current page.");
+    return false;
+  }
+
   if (emailInput) emailInput.value = email || "";
   if (currentPasswordInput && pendingLoginData) currentPasswordInput.value = pendingLoginData.currentPassword || "";
   if (newPasswordInput) newPasswordInput.value = "";
   if (confirmPasswordInput) confirmPasswordInput.value = "";
 
-  if (modal) {
-    modal.classList.add("active");
-  }
+  modal.classList.add("active");
+  return true;
 }
 
 function closeFirstLoginPasswordModal() {
