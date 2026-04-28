@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbwdQX-kEC9yVdcqkkhBE0BhQa6jR4C8SAVObdSvU6gqR9ota0AZqpxQ0GQu3axivNtD/exec";
+const API = "https://script.google.com/macros/s/AKfycbyfuQgCuZp3z91s4i-n40bBYNR_bdwxeUoxxcCQx-3JHiZ_zoLRykwOPgPyuTq6Kwbp/exec";
 
 let pendingLoginData = null;
 let editingRequestId = null;
