@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbyfuQgCuZp3z91s4i-n40bBYNR_bdwxeUoxxcCQx-3JHiZ_zoLRykwOPgPyuTq6Kwbp/exec";
+const API = "https://script.google.com/macros/s/AKfycbxsJV-l17wvkjPTtsoVf4V51J3gjZZMyw4bD3TyxrEljrSWqKQN5d4QTZysr5FAQDXB/exec";
 
 let pendingLoginData = null;
 let editingRequestId = null;
@@ -339,7 +339,7 @@ async function loadRequests(tableId) {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
 
   let html = "";
 
@@ -408,7 +408,7 @@ async function submitRequest() {
       tellerName: localStorage.getItem("fullname"),
       tellerEmail: localStorage.getItem("user"),
       tellerBranchId: localStorage.getItem("branchid"),
-      date: new Date().toLocaleDateString()
+      dateStamp: new Date().toLocaleString()
     })
   });
 
@@ -483,9 +483,66 @@ function getStatusClass(status) {
 
 // 📦 STORE DATA FOR MODAL
 let allRequests = [];
+const REQUEST_DATESTAMP_INDEX = 10;
 
 function normalizeValue(value) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function parseRequestDatestamp(value) {
+  if (value instanceof Date) return value.getTime();
+
+  if (typeof value === "number") {
+    if (value > 100000000000) return value;
+    if (value > 1000000000) return value * 1000;
+    if (value > 20000 && value < 80000) return Math.round((value - 25569) * 86400000);
+  }
+
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return 0;
+
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) return parsed;
+
+  const localMatch = trimmed.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:,?\s+(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+  if (!localMatch) return 0;
+
+  let first = Number(localMatch[1]);
+  let second = Number(localMatch[2]);
+  let year = Number(localMatch[3]);
+  let hour = Number(localMatch[4] || 0);
+  const minute = Number(localMatch[5] || 0);
+  const secondValue = Number(localMatch[6] || 0);
+  const meridiem = (localMatch[7] || "").toUpperCase();
+
+  if (year < 100) year += 2000;
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+
+  const month = first > 12 ? second : first;
+  const day = first > 12 ? first : second;
+  const localDate = new Date(year, month - 1, day, hour, minute, secondValue);
+
+  return Number.isNaN(localDate.getTime()) ? 0 : localDate.getTime();
+}
+
+function getRequestIdTime(request) {
+  const match = String(request?.[0] ?? "").match(/\d{10,}/);
+  return match ? Number(match[0]) : 0;
+}
+
+function compareRequestsByDatestampDesc(a, b) {
+  const dateDiff = parseRequestDatestamp(b?.[REQUEST_DATESTAMP_INDEX]) - parseRequestDatestamp(a?.[REQUEST_DATESTAMP_INDEX]);
+  if (dateDiff !== 0) return dateDiff;
+  return getRequestIdTime(b) - getRequestIdTime(a);
+}
+
+function sortRequestsByDatestamp(rows) {
+  if (!Array.isArray(rows) || rows.length <= 1) return Array.isArray(rows) ? rows : [];
+
+  const header = rows[0];
+  const sortedRows = rows.slice(1).sort(compareRequestsByDatestampDesc);
+  return [header, ...sortedRows];
 }
 
 function escapeHtml(value) {
@@ -508,7 +565,7 @@ async function loadStyledTable(tableId, role) {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   allRequests = data;
 
   let html = "";
@@ -881,7 +938,7 @@ async function loadTellerCounts() {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   const tellerEmail = localStorage.getItem("user");
   const tellerFullname = localStorage.getItem("fullname");
 
@@ -913,7 +970,7 @@ async function loadBranchTable() {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   allRequests = data;
 
   const branchId = localStorage.getItem("branchid");
@@ -954,7 +1011,7 @@ async function loadBranchCounts() {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   const branchId = localStorage.getItem("branchid");
 
   let total = 0;
@@ -984,7 +1041,7 @@ async function loadFinanceTable() {
     body: JSON.stringify({ action: "getRequests" })
   });
 
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   allRequests = data;
 
   renderFinanceTable();
@@ -1133,7 +1190,9 @@ function loadBranchSubmitted() {
     body: JSON.stringify({ action: 'getRequests' })
   })
     .then(res => res.json())
-    .then(data => {
+    .then(rawData => {
+      const data = sortRequestsByDatestamp(rawData);
+      allRequests = data;
       let html = '';
       let count = 0;
 
@@ -1494,7 +1553,7 @@ async function loadAdminTable() {
     method: 'POST',
     body: JSON.stringify({ action: 'getRequests' })
   });
-  const data = await res.json();
+  const data = sortRequestsByDatestamp(await res.json());
   allRequests = data;
 
   let html = '';

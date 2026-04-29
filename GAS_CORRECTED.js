@@ -390,7 +390,7 @@ function createRequest(data) {
     data.tellerName || data.tellerEmail,   // ProcessedBy (fullname, fallback to email)
     "",                 // CheckedBy
     "",                 // ApprovedBy
-    data.date || data.dateStamp || new Date().toLocaleDateString(),  // Date (legacy DateStamp fallback) in column K
+    data.dateStamp || data.date || new Date().toLocaleString(),  // DateStamp in column K
     data.contactNumber,  // ContactNumber (column L = 11)
     data.tellerBranchId || "",  // TellerBranchId (column M = 12)
     ""  // Notes (column N = 13)
@@ -399,12 +399,70 @@ function createRequest(data) {
   return { success: true };
 }
 
+const REQUEST_DATESTAMP_INDEX = 10;
+
+function parseRequestDatestamp(value) {
+  if (value instanceof Date) return value.getTime();
+
+  if (typeof value === "number") {
+    if (value > 100000000000) return value;
+    if (value > 1000000000) return value * 1000;
+    if (value > 20000 && value < 80000) return Math.round((value - 25569) * 86400000);
+  }
+
+  const trimmed = String(value == null ? "" : value).trim();
+  if (!trimmed) return 0;
+
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) return parsed;
+
+  const localMatch = trimmed.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:,?\s+(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+  if (!localMatch) return 0;
+
+  let first = Number(localMatch[1]);
+  let second = Number(localMatch[2]);
+  let year = Number(localMatch[3]);
+  let hour = Number(localMatch[4] || 0);
+  const minute = Number(localMatch[5] || 0);
+  const secondValue = Number(localMatch[6] || 0);
+  const meridiem = String(localMatch[7] || "").toUpperCase();
+
+  if (year < 100) year += 2000;
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+
+  const month = first > 12 ? second : first;
+  const day = first > 12 ? first : second;
+  const localDate = new Date(year, month - 1, day, hour, minute, secondValue);
+
+  return isNaN(localDate.getTime()) ? 0 : localDate.getTime();
+}
+
+function getRequestIdTime(request) {
+  const match = String(request && request[0] != null ? request[0] : "").match(/\d{10,}/);
+  return match ? Number(match[0]) : 0;
+}
+
+function compareRequestsByDatestampDesc(a, b) {
+  const dateDiff = parseRequestDatestamp(b && b[REQUEST_DATESTAMP_INDEX]) - parseRequestDatestamp(a && a[REQUEST_DATESTAMP_INDEX]);
+  if (dateDiff !== 0) return dateDiff;
+  return getRequestIdTime(b) - getRequestIdTime(a);
+}
+
+function sortRequestsByDatestamp(rows) {
+  if (!Array.isArray(rows) || rows.length <= 1) return Array.isArray(rows) ? rows : [];
+
+  const header = rows[0];
+  const sortedRows = rows.slice(1).sort(compareRequestsByDatestampDesc);
+  return [header].concat(sortedRows);
+}
+
 // 📥 GET REQUESTS
 function getRequests(data) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Withdrawals");
   const rows = sheet.getDataRange().getValues();
 
-  return rows;
+  return sortRequestsByDatestamp(rows);
 }
 
 // 🔄 UPDATE STATUS
@@ -473,7 +531,7 @@ function editRequest(data) {
       sheet.getRange(i + 1, 7).setValue("Pending"); // Status
       sheet.getRange(i + 1, 9).setValue(""); // CheckedBy
       sheet.getRange(i + 1, 10).setValue(""); // ApprovedBy
-      sheet.getRange(i + 1, 11).setValue(data.date || data.dateStamp || new Date().toLocaleString()); // DateStamp
+      sheet.getRange(i + 1, 11).setValue(data.dateStamp || data.date || new Date().toLocaleString()); // DateStamp
       sheet.getRange(i + 1, 12).setValue(data.contactNumber || ""); // ContactNumber
       sheet.getRange(i + 1, 14).setValue(""); // Notes
 
