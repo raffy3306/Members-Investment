@@ -470,6 +470,27 @@ tbody tr:last-child td {
   background: #f3f4f6;
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.btn.is-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
 .btn.blue {
   background: #2563eb;
   color: white;
@@ -769,6 +790,17 @@ tbody tr:last-child td {
 
 .login-options a:hover {
   text-decoration: underline;
+}
+
+.login-submit {
+  width: 100%;
+  min-height: 38px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* UTILITY */

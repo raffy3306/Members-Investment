@@ -35,6 +35,22 @@ function redirectToDashboard(role) {
 }
 
 // 🔐 LOGIN
+function setLoginButtonLoading(isLoading) {
+  const button = document.getElementById("loginButton");
+  if (!button) return;
+
+  if (isLoading) {
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>Signing In...</span>';
+    return;
+  }
+
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.innerHTML = "Sign In &rarr;";
+}
+
 async function login() {
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
@@ -45,6 +61,7 @@ async function login() {
   }
 
   const url = `${API}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
+  setLoginButtonLoading(true);
 
   try {
     const res = await fetch(url);
@@ -63,6 +80,7 @@ async function login() {
         if (!opened) {
           alert("This account must change its password before continuing, but the password update form is unavailable on this page. Please reload and try again.");
         }
+        setLoginButtonLoading(false);
         return;
       }
 
@@ -70,11 +88,13 @@ async function login() {
       redirectToDashboard(data.role);
     } else {
       alert("Invalid email or password");
+      setLoginButtonLoading(false);
     }
 
   } catch (err) {
     console.error(err);
     alert("Connection error. Check your API URL.");
+    setLoginButtonLoading(false);
   }
 }
 
@@ -1232,32 +1252,38 @@ function loadBranchSubmitted() {
 
 function navigateToFinance(page) {
   // Update sidebar active state
-  document.querySelectorAll('.sidebar-main .sidebar-btn').forEach(btn => btn.classList.remove('active'));
-  const selectedButton = Array.from(document.querySelectorAll('.sidebar-main .sidebar-btn'))
+  document.querySelectorAll('.sidebar-main .sidebar-btn, .sidebar-admin .sidebar-btn, .sidebar-bottom .sidebar-btn').forEach(btn => btn.classList.remove('active'));
+  const selectedButton = Array.from(document.querySelectorAll('.sidebar-main .sidebar-btn, .sidebar-admin .sidebar-btn, .sidebar-bottom .sidebar-btn'))
     .find(btn => btn.getAttribute('onclick')?.includes(`navigateToFinance('${page}')`));
   if (selectedButton) selectedButton.classList.add('active');
 
   // Update header
   const headerTitle = document.querySelector('.main-header h1');
   const subtitle = document.querySelector('.main-header .subtitle');
+  const headerActions = document.querySelector('.main-header .header-actions');
   if (headerTitle && subtitle) {
     if (page === 'dashboard') {
       headerTitle.innerText = '💜 Finance Dashboard';
       subtitle.innerText = 'Overview of approvals, trends, and monthly performance.';
+      if (headerActions) headerActions.innerHTML = '<button class="btn blue" onclick="loadFinanceDashboard()">Refresh</button>';
     } else if (page === 'audit') {
       headerTitle.innerText = '💜 Audit Logs';
       subtitle.innerText = 'Audit history and request activity for review.';
+      if (headerActions) headerActions.innerHTML = '<button class="btn blue" onclick="loadAuditLogs()">Refresh</button>';
     } else {
       headerTitle.innerText = '💜 Savings and Credit Head Approval';
       subtitle.innerText = 'Review requests forwarded by Branch Manager · Approve or reject withdrawal requests';
+      if (headerActions) headerActions.innerHTML = '<button class="btn blue" onclick="location.reload()">Refresh</button><button class="btn blue" onclick="exportData()">Export</button>';
     }
   }
 
   // Toggle views
+  const summaryCards = document.getElementById('financeSummaryCards');
   const approvalQueue = document.getElementById('approvalQueueView');
   const dashboard = document.getElementById('dashboardView');
   const audit = document.getElementById('auditView');
   
+  if (summaryCards) summaryCards.style.display = (page === 'approval') ? 'grid' : 'none';
   if (approvalQueue) approvalQueue.style.display = (page === 'approval') ? 'block' : 'none';
   if (dashboard) dashboard.style.display = (page === 'dashboard') ? 'block' : 'none';
   if (audit) audit.style.display = (page === 'audit') ? 'block' : 'none';
@@ -1297,29 +1323,77 @@ function loadFinanceDashboard() {
   document.getElementById("dashboardRejected").innerText = rejected;
 }
 
-function loadAuditLogs() {
-  // Simulated audit logs - in production, this would come from the API
-  const auditLogs = [
-    { requestNo: "REQ-1776511022614", action: "Forwarded", user: "ai.bmpcmarketing@gmail.com", status: "Forwarded", timestamp: "4/18/2026, 7:17:02 PM" },
-    { requestNo: "REQ-1776511330945", action: "Forwarded", user: "ai.bmpcmarketing@gmail.com", status: "Forwarded", timestamp: "4/18/2026, 7:22:10 PM" },
-    { requestNo: "REQ-1776511547603", action: "Forwarded", user: "ai.bmpcmarketing@gmail.com", status: "Forwarded", timestamp: "4/18/2026, 7:25:47 PM" }
-  ];
+function getAuditAction(status) {
+  if (status === "Pending") return "Submitted";
+  if (status === "Forwarded") return "Forwarded to Savings and Credit Head";
+  if (status === "Under Review") return "Returned to Branch Manager";
+  if (status === "Returned") return "Returned to Teller";
+  if (status === "Approved") return "Approved";
+  if (status === "Rejected") return "Rejected";
+  return "Updated";
+}
 
-  let html = "";
-  for (const log of auditLogs) {
-    html += `
-      <tr>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;">${log.requestNo}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;">${log.action}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;">${log.user}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;"><span class="${getStatusClass(log.status)}">${log.status}</span></td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee;">${log.timestamp}</td>
-      </tr>
-    `;
+function getAuditUser(request) {
+  const status = request?.[6];
+
+  if (status === "Approved" || status === "Rejected") {
+    return request?.[9] || request?.[8] || request?.[7] || "Unknown";
   }
 
+  if (status === "Forwarded" || status === "Under Review" || status === "Returned") {
+    return request?.[8] || request?.[9] || request?.[7] || "Unknown";
+  }
+
+  return request?.[7] || request?.[8] || request?.[9] || "Unknown";
+}
+
+function formatAuditTimestamp(value) {
+  if (!value) return "N/A";
+
+  const parsed = parseRequestDatestamp(value);
+  if (parsed) return new Date(parsed).toLocaleString();
+
+  return String(value);
+}
+
+async function loadAuditLogs() {
   const auditTable = document.getElementById("auditTable");
-  if (auditTable) auditTable.innerHTML = html;
+  if (!auditTable) return;
+
+  auditTable.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">Loading audit logs...</td></tr>';
+
+  try {
+    if (!Array.isArray(allRequests) || allRequests.length <= 1) {
+      const res = await fetch(API, {
+        method: "POST",
+        body: JSON.stringify({ action: "getRequests" })
+      });
+      allRequests = sortRequestsByDatestamp(await res.json());
+    }
+
+    const logs = Array.isArray(allRequests)
+      ? allRequests.slice(1).filter(request => Array.isArray(request) && request.length)
+      : [];
+
+    const html = logs.map(request => {
+      const status = request[6] || "Updated";
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(request[0])}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(getAuditAction(status))}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(getAuditUser(request))}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;"><span class="${getStatusClass(status)}">${escapeHtml(status)}</span></td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(formatAuditTimestamp(request[10]))}</td>
+        </tr>
+      `;
+    }).join("");
+
+    auditTable.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">No audit logs found.</td></tr>';
+  } catch (err) {
+    console.error("Failed to load audit logs", err);
+    auditTable.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #b91c1c;">Unable to load audit logs.</td></tr>';
+  }
 }
 
 function exportData() {
