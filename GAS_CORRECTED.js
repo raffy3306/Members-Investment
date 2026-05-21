@@ -43,6 +43,87 @@ function isFirstLoginUser(row, indexes) {
   return normalizeFlag(firstLoginValue) || normalizeFlag(mustChangeValue);
 }
 
+const PASSWORD_HASH_ALGORITHM = "sha256";
+const PASSWORD_HASH_ITERATIONS = 12000;
+
+function normalizePasswordInput(password) {
+  return String(password == null ? "" : password).trim();
+}
+
+function makePasswordSalt() {
+  return Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
+}
+
+function digestToWebSafeBase64(bytes) {
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, "");
+}
+
+function computePasswordHash(password, salt, iterations) {
+  let digestInput = normalizePasswordInput(password) + ":" + String(salt || "");
+
+  for (let i = 0; i < iterations; i++) {
+    digestInput = digestToWebSafeBase64(
+      Utilities.computeDigest(
+        Utilities.DigestAlgorithm.SHA_256,
+        digestInput,
+        Utilities.Charset.UTF_8
+      )
+    );
+  }
+
+  return digestInput;
+}
+
+function hashPassword(password) {
+  const salt = makePasswordSalt();
+  const hash = computePasswordHash(password, salt, PASSWORD_HASH_ITERATIONS);
+  return [PASSWORD_HASH_ALGORITHM, PASSWORD_HASH_ITERATIONS, salt, hash].join("$");
+}
+
+function isHashedPassword(storedPassword) {
+  return /^sha256\$\d+\$[^$]+\$[^$]+$/.test(String(storedPassword || "").trim());
+}
+
+function constantTimeEquals(left, right) {
+  const leftText = String(left || "");
+  const rightText = String(right || "");
+  const maxLength = Math.max(leftText.length, rightText.length);
+  let diff = leftText.length ^ rightText.length;
+
+  for (let i = 0; i < maxLength; i++) {
+    const leftCode = i < leftText.length ? leftText.charCodeAt(i) : 0;
+    const rightCode = i < rightText.length ? rightText.charCodeAt(i) : 0;
+    diff |= leftCode ^ rightCode;
+  }
+
+  return diff === 0;
+}
+
+function verifyPassword(password, storedPassword) {
+  const stored = String(storedPassword || "").trim();
+  const candidate = normalizePasswordInput(password);
+
+  if (!stored) return false;
+
+  if (!isHashedPassword(stored)) {
+    return stored === candidate;
+  }
+
+  const parts = stored.split("$");
+  const iterations = Number(parts[1]);
+
+  if (!iterations || iterations < 1) return false;
+
+  const candidateHash = computePasswordHash(candidate, parts[2], iterations);
+  return constantTimeEquals(candidateHash, parts[3]);
+}
+
+function upgradePasswordHashIfNeeded(sheet, rowNumber, passwordIndex, password, storedPassword) {
+  if (!isHashedPassword(storedPassword)) {
+    sheet.getRange(rowNumber, passwordIndex + 1).setValue(hashPassword(password));
+  }
+}
+
 // 🔐 LOGIN - UNIFIED FUNCTION
 function login(email, password) {
   const meta = getUsersSheetMeta();
@@ -59,14 +140,16 @@ function login(email, password) {
   };
 
   const normalizedEmail = String(email).trim().toLowerCase();
-  const normalizedPassword = String(password).trim();
+  const normalizedPassword = normalizePasswordInput(password);
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const sheetEmail = String(row[indexes.email] || "").trim().toLowerCase();
     const sheetPassword = String(row[indexes.password] || "").trim();
 
-    if (sheetEmail === normalizedEmail && sheetPassword === normalizedPassword) {
+    if (sheetEmail === normalizedEmail && verifyPassword(normalizedPassword, sheetPassword)) {
+      upgradePasswordHashIfNeeded(meta.sheet, i + 1, indexes.password, normalizedPassword, sheetPassword);
+
       return {
         success: true,
         role: row[indexes.role],
@@ -131,8 +214,8 @@ function doPost(e) {
 
 function changePassword(data) {
   const email = String(data.email || "").trim().toLowerCase();
-  const currentPassword = String(data.currentPassword || "").trim();
-  const newPassword = String(data.newPassword || "").trim();
+  const currentPassword = normalizePasswordInput(data.currentPassword);
+  const newPassword = normalizePasswordInput(data.newPassword);
 
   if (!email || !currentPassword || !newPassword) {
     return { success: false, message: "Email, current password, and new password are required." };
@@ -160,11 +243,11 @@ function changePassword(data) {
     const sheetPassword = String(row[indexes.password] || "").trim();
 
     if (sheetEmail === email) {
-      if (sheetPassword !== currentPassword) {
+      if (!verifyPassword(currentPassword, sheetPassword)) {
         return { success: false, message: "Current password is incorrect." };
       }
 
-      meta.sheet.getRange(i + 1, indexes.password + 1).setValue(newPassword);
+      meta.sheet.getRange(i + 1, indexes.password + 1).setValue(hashPassword(newPassword));
 
       if (indexes.firstLogin >= 0) {
         meta.sheet.getRange(i + 1, indexes.firstLogin + 1).setValue(false);
@@ -191,13 +274,11 @@ function forgotPassword(email) {
   const rows = meta.rows;
   const indexes = {
     email: getHeaderIndex(meta.headerLookup, ["email", "user", "username"], 0),
-    password: getHeaderIndex(meta.headerLookup, ["password"], 1),
     fullname: getHeaderIndex(meta.headerLookup, ["fullname", "full name", "name"], 3)
   };
 
   for (let i = 1; i < rows.length; i++) {
     const sheetEmail = String(rows[i][indexes.email] || "").trim().toLowerCase();
-    const sheetPassword = String(rows[i][indexes.password] || "").trim();
     const fullname = String(rows[i][indexes.fullname] || "User").trim();
 
     if (sheetEmail === normalizedEmail) {
@@ -206,8 +287,7 @@ function forgotPassword(email) {
         "Investment Withdrawal System Password Recovery",
         "Hello " + fullname + ",\n\n" +
         "You requested help signing in to the Investment Withdrawal System.\n\n" +
-        "Your current password is: " + sheetPassword + "\n\n" +
-        "Please sign in and change it with your administrator if needed.\n\n" +
+        "For your security, passwords cannot be viewed or emailed. Please ask an administrator to reset your password from User Management.\n\n" +
         "If you did not request this email, please ignore it."
       );
 
@@ -265,7 +345,7 @@ function createUser(data) {
     const meta = getUsersSheetMeta();
     const indexes = getUserIndexes(meta);
     const email = String(data.email || "").trim().toLowerCase();
-    const password = String(data.password || "").trim();
+    const password = normalizePasswordInput(data.password);
     const role = String(data.role || "").trim();
     const fullname = String(data.fullname || "").trim();
     const position = String(data.position || "").trim();
@@ -287,7 +367,7 @@ function createUser(data) {
     const newRow = new Array(rowLength).fill("");
 
     newRow[indexes.email] = email;
-    newRow[indexes.password] = password;
+    newRow[indexes.password] = hashPassword(password);
     newRow[indexes.role] = role;
     newRow[indexes.fullname] = fullname;
     newRow[indexes.position] = position;
@@ -314,7 +394,7 @@ function updateUser(data) {
     const indexes = getUserIndexes(meta);
     const originalEmail = String(data.originalEmail || "").trim().toLowerCase();
     const email = String(data.email || "").trim().toLowerCase();
-    const password = String(data.password || "").trim();
+    const password = normalizePasswordInput(data.password);
     const role = String(data.role || "").trim();
     const fullname = String(data.fullname || "").trim();
     const position = String(data.position || "").trim();
@@ -350,7 +430,7 @@ function updateUser(data) {
     meta.sheet.getRange(rowNumber, indexes.branchid + 1).setValue(branchid);
 
     if (password) {
-      meta.sheet.getRange(rowNumber, indexes.password + 1).setValue(password);
+      meta.sheet.getRange(rowNumber, indexes.password + 1).setValue(hashPassword(password));
     }
 
     if (indexes.firstLogin >= 0) {

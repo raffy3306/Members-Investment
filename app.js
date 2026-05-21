@@ -1,7 +1,8 @@
-const API = "https://script.google.com/macros/s/AKfycbxsJV-l17wvkjPTtsoVf4V51J3gjZZMyw4bD3TyxrEljrSWqKQN5d4QTZysr5FAQDXB/exec";
+const API = "https://script.google.com/macros/s/AKfycbxd2fKT4bG4RPBbuT7n8F_U4839QP-yh872PW_SWqKxEVW25IWgrmelHgH27wWz-6Z_/exec";
 
 let pendingLoginData = null;
 let editingRequestId = null;
+let isSubmittingRequest = false;
 let allUsers = [];
 let editingUserEmail = null;
 
@@ -60,11 +61,17 @@ async function login() {
     return;
   }
 
-  const url = `${API}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
   setLoginButtonLoading(true);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "login",
+        email,
+        password
+      })
+    });
     const data = await res.json();
 
     console.log(data);
@@ -281,11 +288,30 @@ function openRequestModal() {
 }
 
 function closeRequestModal() {
+  if (isSubmittingRequest) {
+    alert("Please wait until the system confirms the request submission.");
+    return;
+  }
+
   const modal = document.getElementById("requestModal");
   if (modal) {
     modal.style.display = "none";
   }
   resetRequestForm();
+}
+
+function setRequestSubmitLoading(isLoading) {
+  isSubmittingRequest = isLoading;
+
+  const submitButton = document.getElementById("requestSubmitButton");
+  if (!submitButton) return;
+
+  submitButton.disabled = isLoading;
+  submitButton.innerText = isLoading
+    ? "Submitting..."
+    : editingRequestId
+      ? "Save Changes"
+      : "Submit Request";
 }
 
 function resetRequestForm() {
@@ -295,7 +321,10 @@ function resetRequestForm() {
   const submitButton = document.getElementById("requestSubmitButton");
 
   if (title) title.innerText = "New Withdrawal Request";
-  if (submitButton) submitButton.innerText = "Submit Request";
+  if (submitButton) {
+    submitButton.innerText = isSubmittingRequest ? "Submitting..." : "Submit Request";
+    submitButton.disabled = isSubmittingRequest;
+  }
 
   const member = document.getElementById("requestMember");
   const contact = document.getElementById("requestContact");
@@ -327,7 +356,10 @@ function populateRequestForm(request) {
   editingRequestId = request[0];
 
   if (title) title.innerText = "Edit Withdrawal Request";
-  if (submitButton) submitButton.innerText = "Save Changes";
+  if (submitButton) {
+    submitButton.innerText = isSubmittingRequest ? "Submitting..." : "Save Changes";
+    submitButton.disabled = isSubmittingRequest;
+  }
   if (member) member.value = request[1] || "";
   if (contact) contact.value = request[11] || "";
   if (total) total.value = request[2] || "";
@@ -387,6 +419,8 @@ async function loadRequests(tableId) {
 
 // ➕ SUBMIT REQUEST (TELLER)
 async function submitRequest() {
+  if (isSubmittingRequest) return;
+
   const total = parseFloat(document.getElementById("requestTotal").value);
   const amount = parseFloat(document.getElementById("requestAmount").value);
   const memberName = document.getElementById("requestMember").value.trim();
@@ -414,27 +448,41 @@ async function submitRequest() {
   }
 
   const action = editingRequestId ? "editRequest" : "createRequest";
+  const successMessage = editingRequestId ? "Request updated and resubmitted for review." : "Submitted!";
 
-  await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({
-      action: action,
-      request_id: editingRequestId,
-      memberName: memberName,
-      totalInvestment: total,
-      amount: amount,
-      purpose: purpose,
-      contactNumber: contactNumber,
-      tellerName: localStorage.getItem("fullname"),
-      tellerEmail: localStorage.getItem("user"),
-      tellerBranchId: localStorage.getItem("branchid"),
-      dateStamp: new Date().toLocaleString()
-    })
-  });
+  setRequestSubmitLoading(true);
 
-  alert(editingRequestId ? "Request updated and resubmitted for review." : "Submitted!");
-  closeRequestModal();
-  location.reload();
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({
+        action: action,
+        request_id: editingRequestId,
+        memberName: memberName,
+        totalInvestment: total,
+        amount: amount,
+        purpose: purpose,
+        contactNumber: contactNumber,
+        tellerName: localStorage.getItem("fullname"),
+        tellerEmail: localStorage.getItem("user"),
+        tellerBranchId: localStorage.getItem("branchid"),
+        dateStamp: new Date().toLocaleString()
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`Request failed with status ${res.status}`);
+    }
+
+    alert(successMessage);
+    setRequestSubmitLoading(false);
+    closeRequestModal();
+    location.reload();
+  } catch (err) {
+    console.error("Failed to submit request", err);
+    alert("The request was not confirmed by the system. Please try again.");
+    setRequestSubmitLoading(false);
+  }
 }
 
 // 🔄 UPDATE STATUS
@@ -460,6 +508,16 @@ async function updateStatus(id, status) {
 
     if (!notes) {
       alert("Notes are required before returning a request to the branch manager.");
+      return;
+    }
+  }
+
+  if (role === "finance_manager" && status === "Rejected") {
+    notes = window.prompt("Enter reason or notes for rejecting this request:", "") || "";
+    notes = notes.trim();
+
+    if (!notes) {
+      alert("Reason or notes are required before rejecting a request.");
       return;
     }
   }
@@ -504,6 +562,7 @@ function getStatusClass(status) {
 // 📦 STORE DATA FOR MODAL
 let allRequests = [];
 const REQUEST_DATESTAMP_INDEX = 10;
+const REQUEST_NOTES_INDEX = 13;
 
 function normalizeValue(value) {
   return String(value ?? "").trim().toLowerCase();
@@ -574,9 +633,96 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function getRequestNotes(request) {
+  return Array.isArray(request) ? String(request[REQUEST_NOTES_INDEX] || "").trim() : "";
+}
+
 function requestBelongsToBranch(request, branchId) {
   if (!Array.isArray(request)) return false;
   return normalizeValue(request[12]) === normalizeValue(branchId);
+}
+
+function isSavingsCreditHeadApprovalRequest(request) {
+  return Array.isArray(request) && request[6] === "Forwarded";
+}
+
+function parseDateFilterInput(value, endOfDay = false) {
+  const parts = String(value || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return null;
+
+  const [year, month, day] = parts;
+  const date = endOfDay
+    ? new Date(year, month - 1, day, 23, 59, 59, 999)
+    : new Date(year, month - 1, day);
+
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+function getAuditDateFilterBounds() {
+  const startValue = document.getElementById("auditDateStart")?.value || "";
+  const endValue = document.getElementById("auditDateEnd")?.value || "";
+
+  return {
+    startTimestamp: parseDateFilterInput(startValue),
+    endTimestamp: parseDateFilterInput(endValue, true)
+  };
+}
+
+function requestMatchesAuditDateFilter(request, startTimestamp, endTimestamp) {
+  if (startTimestamp === null && endTimestamp === null) return true;
+
+  const requestTimestamp = parseRequestDatestamp(request?.[REQUEST_DATESTAMP_INDEX]);
+  if (!requestTimestamp) return false;
+
+  if (startTimestamp !== null && requestTimestamp < startTimestamp) return false;
+  if (endTimestamp !== null && requestTimestamp > endTimestamp) return false;
+
+  return true;
+}
+
+function calculateFinanceDashboardCounts(requests) {
+  const counts = {
+    awaiting: 0,
+    approved: 0,
+    rejected: 0,
+    review: 0
+  };
+  const now = new Date();
+
+  if (!Array.isArray(requests)) return counts;
+
+  for (let i = 1; i < requests.length; i++) {
+    const request = requests[i];
+    if (!Array.isArray(request)) continue;
+
+    const status = request[6];
+    const timestamp = parseRequestDatestamp(request[REQUEST_DATESTAMP_INDEX]);
+    const date = timestamp ? new Date(timestamp) : null;
+    const isCurrentMonth = date &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+
+    if (isSavingsCreditHeadApprovalRequest(request)) counts.awaiting++;
+    if (status === "Under Review") counts.review++;
+    if (isCurrentMonth && status === "Approved") counts.approved++;
+    if (isCurrentMonth && status === "Rejected") counts.rejected++;
+  }
+
+  return counts;
+}
+
+function updateFinanceDashboardCardsFromRequests(requests) {
+  const counts = calculateFinanceDashboardCounts(requests);
+
+  const awaitingEl = document.getElementById("countAwaiting");
+  const approvedEl = document.getElementById("countApproved");
+  const rejectedEl = document.getElementById("countRejected");
+  const reviewEl = document.getElementById("countReview");
+
+  if (awaitingEl) awaitingEl.innerText = counts.awaiting;
+  if (approvedEl) approvedEl.innerText = counts.approved;
+  if (rejectedEl) rejectedEl.innerText = counts.rejected;
+  if (reviewEl) reviewEl.innerText = counts.review;
 }
 
 async function loadStyledTable(tableId, role) {
@@ -691,7 +837,7 @@ function openModal(id) {
   const total = parseFloat(r[2]) || 0;
   const withdrawn = parseFloat(r[3]) || 0;
   const tellerName = r[7] || localStorage.getItem("fullname") || "Unknown";
-  const branchManagerNotes = r[13] || "";
+  const requestNotes = getRequestNotes(r);
 
   document.getElementById("modalContent").innerHTML = `
     <div style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
@@ -739,10 +885,10 @@ function openModal(id) {
       <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600;">Current Status:</label>
       <span class="${getStatusClass(r[6])}" style="padding: 4px 10px; border-radius: 20px; font-size: 12px;">${r[6]}</span>
     </div>
-    ${((r[6] === "Returned" || r[6] === "Under Review") && branchManagerNotes) ? `
+    ${((r[6] === "Returned" || r[6] === "Under Review" || r[6] === "Rejected") && requestNotes) ? `
       <div style="margin-top: 20px; padding: 16px; background: #fff4f4; border-left: 4px solid #dc2626; border-radius: 6px;">
-        <label style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">${r[6] === "Returned" ? "Branch Manager Notes" : "Finance Manager Notes"}</label>
-        <p style="margin: 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(branchManagerNotes)}</p>
+        <label style="font-size: 11px; color: #b91c1c; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">${r[6] === "Returned" ? "Branch Manager Notes" : r[6] === "Rejected" ? "Rejection Reason / Notes" : "Finance Manager Notes"}</label>
+        <p style="margin: 0; font-size: 14px; color: #7f1d1d;">${escapeHtml(requestNotes)}</p>
       </div>
     ` : ""}
   `;
@@ -939,17 +1085,19 @@ async function printRequest() {
 }
 
 async function loadDashboardCounts() {
-  const res = await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({ action: "getDashboardCounts" })
-  });
+  let data = allRequests;
 
-  const data = await res.json();
+  if (!Array.isArray(data) || data.length <= 1) {
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({ action: "getRequests" })
+    });
 
-  document.getElementById("countAwaiting").innerText = data.awaiting;
-  document.getElementById("countApproved").innerText = data.approved;
-  document.getElementById("countRejected").innerText = data.rejected;
-  document.getElementById("countReview").innerText = data.review;
+    data = sortRequestsByDatestamp(await res.json());
+    allRequests = data;
+  }
+
+  updateFinanceDashboardCardsFromRequests(data);
 }
 
 async function loadTellerCounts() {
@@ -1066,6 +1214,7 @@ async function loadFinanceTable() {
 
   renderFinanceTable();
   updateFinanceSummary();
+  updateFinanceDashboardCardsFromRequests(allRequests);
 }
 
 function renderFinanceTable(searchText = "", statusFilter = "All Statuses") {
@@ -1081,14 +1230,14 @@ function renderFinanceTable(searchText = "", statusFilter = "All Statuses") {
   for (let i = 1; i < allRequests.length; i++) {
     const r = allRequests[i];
     if (!Array.isArray(r) || !r.length) continue;
+    if (!isSavingsCreditHeadApprovalRequest(r)) continue;
 
-    if (r[6] === "Forwarded") forwardedCount++;
+    forwardedCount++;
 
-    const rowText = `${r[0]} ${r[1]} ${r[5]} ${r[7]} ${r[6]}`.toLowerCase();
+    const rowText = `${r[0]} ${r[1]} ${r[5]} ${r[8]} ${r[6]}`.toLowerCase();
     if (searchText && !rowText.includes(searchText.toLowerCase())) continue;
 
-    if (statusFilter === "Pending" && r[6] !== "Pending") continue;
-    if (statusFilter === "Forwarded" && r[6] !== "Forwarded") continue;
+    if (statusFilter !== "All Statuses" && r[6] !== statusFilter) continue;
 
     filteredCount++;
     const dateStr = r[10] ? new Date(r[10]).toLocaleString() : "N/A";
@@ -1101,7 +1250,7 @@ function renderFinanceTable(searchText = "", statusFilter = "All Statuses") {
         <td>₱${r[3]}</td>
         <td>₱${r[4]}</td>
         <td>${r[5]}</td>
-        <td>${r[7]}</td>
+        <td>${r[8] || "N/A"}</td>
         <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
         <td>${dateStr}</td>
         <td>
@@ -1128,7 +1277,7 @@ function updateFinanceSummary() {
 
   for (let i = 1; i < allRequests.length; i++) {
     const r = allRequests[i];
-    if (Array.isArray(r) && r[6] === "Forwarded") forwardedCount++;
+    if (isSavingsCreditHeadApprovalRequest(r)) forwardedCount++;
   }
 
   if (document.getElementById("approvalBadge")) {
@@ -1139,6 +1288,9 @@ function updateFinanceSummary() {
 function initializeFinancePage() {
   const searchInput = document.getElementById("financeSearch");
   const statusSelect = document.getElementById("financeStatusFilter");
+  const auditDateStart = document.getElementById("auditDateStart");
+  const auditDateEnd = document.getElementById("auditDateEnd");
+  const auditDateClear = document.getElementById("auditDateClear");
 
   if (searchInput) {
     searchInput.addEventListener("input", () => {
@@ -1149,6 +1301,20 @@ function initializeFinancePage() {
   if (statusSelect) {
     statusSelect.addEventListener("change", () => {
       renderFinanceTable(searchInput ? searchInput.value : "", statusSelect.value);
+    });
+  }
+
+  [auditDateStart, auditDateEnd].forEach(input => {
+    if (input) {
+      input.addEventListener("change", () => loadAuditLogs());
+    }
+  });
+
+  if (auditDateClear) {
+    auditDateClear.addEventListener("click", () => {
+      if (auditDateStart) auditDateStart.value = "";
+      if (auditDateEnd) auditDateEnd.value = "";
+      loadAuditLogs();
     });
   }
 }
@@ -1299,8 +1465,14 @@ function navigateToFinance(page) {
   }
 }
 
-function loadFinanceDashboard() {
-  if (!Array.isArray(allRequests)) return;
+async function loadFinanceDashboard() {
+  if (!Array.isArray(allRequests) || allRequests.length <= 1) {
+    const res = await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({ action: "getRequests" })
+    });
+    allRequests = sortRequestsByDatestamp(await res.json());
+  }
 
   let total = 0;
   let awaiting = 0;
@@ -1321,6 +1493,36 @@ function loadFinanceDashboard() {
   document.getElementById("dashboardAwaiting").innerText = awaiting;
   document.getElementById("dashboardApproved").innerText = approved;
   document.getElementById("dashboardRejected").innerText = rejected;
+  renderFinanceRejectedTable();
+}
+
+function renderFinanceRejectedTable() {
+  const rejectedTable = document.getElementById("financeRejectedTable");
+  if (!rejectedTable || !Array.isArray(allRequests)) return;
+
+  let html = "";
+
+  for (let i = 1; i < allRequests.length; i++) {
+    const r = allRequests[i];
+    if (!Array.isArray(r) || r[6] !== "Rejected") continue;
+
+    const dateStr = r[10] ? new Date(r[10]).toLocaleString() : "N/A";
+    const notes = getRequestNotes(r) || "No notes recorded.";
+    const modalRequestId = escapeHtml(JSON.stringify(String(r[0])));
+
+    html += `
+      <tr>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>â‚±${escapeHtml(r[3])}</td>
+        <td>${escapeHtml(notes)}</td>
+        <td>${escapeHtml(dateStr)}</td>
+        <td><button class="btn blue" onclick="openModal(${modalRequestId})">View</button></td>
+      </tr>
+    `;
+  }
+
+  rejectedTable.innerHTML = html || '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">No rejected requests found.</td></tr>';
 }
 
 function getAuditAction(status) {
@@ -1371,8 +1573,17 @@ async function loadAuditLogs() {
       allRequests = sortRequestsByDatestamp(await res.json());
     }
 
+    const { startTimestamp, endTimestamp } = getAuditDateFilterBounds();
+    const hasDateFilter = startTimestamp !== null || endTimestamp !== null;
+
     const logs = Array.isArray(allRequests)
-      ? allRequests.slice(1).filter(request => Array.isArray(request) && request.length)
+      ? allRequests
+          .slice(1)
+          .filter(request => (
+            Array.isArray(request) &&
+            request.length &&
+            requestMatchesAuditDateFilter(request, startTimestamp, endTimestamp)
+          ))
       : [];
 
     const html = logs.map(request => {
@@ -1384,12 +1595,16 @@ async function loadAuditLogs() {
           <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(getAuditAction(status))}</td>
           <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(getAuditUser(request))}</td>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><span class="${getStatusClass(status)}">${escapeHtml(status)}</span></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(formatAuditTimestamp(request[10]))}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(formatAuditTimestamp(request[REQUEST_DATESTAMP_INDEX]))}</td>
         </tr>
       `;
     }).join("");
 
-    auditTable.innerHTML = html || '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">No audit logs found.</td></tr>';
+    const emptyMessage = hasDateFilter
+      ? "No audit logs found for the selected dates."
+      : "No audit logs found.";
+
+    auditTable.innerHTML = html || `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #999;">${emptyMessage}</td></tr>`;
   } catch (err) {
     console.error("Failed to load audit logs", err);
     auditTable.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #b91c1c;">Unable to load audit logs.</td></tr>';

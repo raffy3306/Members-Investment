@@ -121,8 +121,7 @@ if (localStorage.getItem("role") !== "finance_manager") {
         <div class="table-controls">
           <input id="financeSearch" type="text" placeholder="Search member, purpose or manager..." class="search-input">
           <select id="financeStatusFilter" class="status-filter">
-            <option>All Statuses</option>
-            <option value="Pending">Pending</option>
+            <option value="All Statuses">All Approval Requests</option>
             <option value="Forwarded">Forwarded</option>
           </select>
         </div>
@@ -170,6 +169,27 @@ if (localStorage.getItem("role") !== "finance_manager") {
             <p id="dashboardRejected" style="font-size: 28px; font-weight: bold; color: #cc0000;">0</p>
           </div>
         </div>
+        <div style="margin-top: 24px; text-align: left;">
+          <h3 style="margin-bottom: 8px;">Rejected Requests</h3>
+          <p style="color: #888; margin-top: 0; margin-bottom: 12px;">Rejection reasons and notes entered by the approver</p>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f5f5f5;">
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">REQUEST NO.</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">MEMBER NAME</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">AMOUNT</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">REASON / NOTES</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">DATE</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="financeRejectedTable">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 20px; color: #999;">No rejected requests found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -177,8 +197,21 @@ if (localStorage.getItem("role") !== "finance_manager") {
     <div id="auditView" style="display: none;">
       <div class="table-container">
         <div class="table-header">
-          <h3>Audit Logs</h3>
-          <p style="color: #888; margin-top: 5px;">Request activity and approval history</p>
+          <div>
+            <h3>Audit Logs</h3>
+            <p style="color: #888; margin-top: 5px;">Request activity and approval history</p>
+          </div>
+          <div class="table-controls">
+            <label class="date-filter-label" for="auditDateStart">
+              Date Start
+              <input id="auditDateStart" type="date" class="status-filter date-filter-input">
+            </label>
+            <label class="date-filter-label" for="auditDateEnd">
+              Date End
+              <input id="auditDateEnd" type="date" class="status-filter date-filter-input">
+            </label>
+            <button class="btn" type="button" id="auditDateClear">Clear</button>
+          </div>
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
           <thead>

@@ -337,6 +337,7 @@ body.login-page {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .search-input {
@@ -374,6 +375,20 @@ body.login-page {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.date-filter-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.date-filter-input {
+  min-width: 150px;
 }
 
 /* TABLE */
