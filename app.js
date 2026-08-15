@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbxLxhKZXuGVcTaD8qrlpGb7WpLWJVh5xdhfD9Q4FQPoYCGbnSA-koYGfw6KNZIlbzs/exec";
+const API = "https://script.google.com/macros/s/AKfycbxjM0OnGmhkWDJI27XcX61Pem-QBDI-kt2XRQa3F8Drra1DlGHVeTbTB2G1EN-gKZyv/exec";
 let requestLoadingCount = 0;
 let requestLoadingStartedAt = 0;
 let requestLoadingHideTimer = null;
