@@ -1,10 +1,276 @@
-const API = "https://script.google.com/macros/s/AKfycbxd2fKT4bG4RPBbuT7n8F_U4839QP-yh872PW_SWqKxEVW25IWgrmelHgH27wWz-6Z_/exec";
+const API = "https://script.google.com/macros/s/AKfycbxLxhKZXuGVcTaD8qrlpGb7WpLWJVh5xdhfD9Q4FQPoYCGbnSA-koYGfw6KNZIlbzs/exec";
+let requestLoadingCount = 0;
+let requestLoadingStartedAt = 0;
+let requestLoadingHideTimer = null;
+let activeAdminSection = "requests";
+const REQUEST_DATE_FROM_KEY = "requestDateFrom";
+const REQUEST_DATE_TO_KEY = "requestDateTo";
+
+function formatLocalIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getCurrentMonthDateRange() {
+  const now = new Date();
+  return {
+    dateFrom: formatLocalIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+    dateTo: formatLocalIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+  };
+}
+
+function getActiveRequestDateRange() {
+  const defaults = getCurrentMonthDateRange();
+  const dateFrom = sessionStorage.getItem(REQUEST_DATE_FROM_KEY) || defaults.dateFrom;
+  const dateTo = sessionStorage.getItem(REQUEST_DATE_TO_KEY) || defaults.dateTo;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo) || dateFrom > dateTo) {
+    return defaults;
+  }
+  return { dateFrom, dateTo };
+}
+
+function applyRequestDateFilter() {
+  const dateFrom = document.getElementById("requestDateFrom")?.value || "";
+  const dateTo = document.getElementById("requestDateTo")?.value || "";
+  if (!dateFrom || !dateTo) {
+    alert("Please select both Date From and Date To.");
+    return;
+  }
+  if (dateFrom > dateTo) {
+    alert("Date From cannot be later than Date To.");
+    return;
+  }
+  sessionStorage.setItem(REQUEST_DATE_FROM_KEY, dateFrom);
+  sessionStorage.setItem(REQUEST_DATE_TO_KEY, dateTo);
+  window.location.reload();
+}
+
+function resetRequestDateFilterToCurrentMonth() {
+  const range = getCurrentMonthDateRange();
+  sessionStorage.setItem(REQUEST_DATE_FROM_KEY, range.dateFrom);
+  sessionStorage.setItem(REQUEST_DATE_TO_KEY, range.dateTo);
+  window.location.reload();
+}
+
+function initializeRequestDateFilter() {
+  const mainHeader = document.querySelector(".main-header");
+  if (!mainHeader || document.getElementById("requestDateFilter")) return;
+
+  const range = getActiveRequestDateRange();
+  const filter = document.createElement("section");
+  filter.id = "requestDateFilter";
+  filter.className = "request-date-filter";
+  filter.setAttribute("aria-label", "Request date range");
+
+  const heading = document.createElement("div");
+  heading.className = "request-date-filter-heading";
+  const title = document.createElement("strong");
+  title.textContent = "Request Period";
+  const subtitle = document.createElement("span");
+  subtitle.textContent = "Only requests within this date range are retrieved.";
+  heading.append(title, subtitle);
+
+  const controls = document.createElement("div");
+  controls.className = "request-date-filter-controls";
+  [
+    { id: "requestDateFrom", label: "Date From", value: range.dateFrom },
+    { id: "requestDateTo", label: "Date To", value: range.dateTo }
+  ].forEach(item => {
+    const label = document.createElement("label");
+    label.setAttribute("for", item.id);
+    label.textContent = item.label;
+    const input = document.createElement("input");
+    input.id = item.id;
+    input.type = "date";
+    input.value = item.value;
+    label.appendChild(input);
+    controls.appendChild(label);
+  });
+
+  const applyButton = document.createElement("button");
+  applyButton.type = "button";
+  applyButton.className = "btn blue";
+  applyButton.textContent = "Apply";
+  applyButton.addEventListener("click", applyRequestDateFilter);
+  const monthButton = document.createElement("button");
+  monthButton.type = "button";
+  monthButton.className = "btn";
+  monthButton.textContent = "This Month";
+  monthButton.addEventListener("click", resetRequestDateFilterToCurrentMonth);
+  controls.append(applyButton, monthButton);
+
+  filter.append(heading, controls);
+  mainHeader.insertAdjacentElement("afterend", filter);
+  if (document.getElementById("usersSection") || document.getElementById("settingsSection")) {
+    setRequestDateFilterVisibility(activeAdminSection === "requests");
+  }
+}
+
+function setRequestDateFilterVisibility(visible) {
+  const filter = document.getElementById("requestDateFilter");
+  if (!filter) return;
+  filter.hidden = !visible;
+  if (visible) {
+    filter.style.removeProperty("display");
+  } else {
+    filter.style.setProperty("display", "none", "important");
+  }
+}
+
+function getRequestLoadingIndicator() {
+  let overlay = document.getElementById("requestLoadingOverlay");
+  if (overlay) return overlay;
+
+  overlay = document.createElement("div");
+  overlay.id = "requestLoadingOverlay";
+  overlay.className = "request-loading-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.setAttribute("aria-hidden", "true");
+
+  const card = document.createElement("div");
+  card.className = "request-loading-card";
+  const spinner = document.createElement("span");
+  spinner.className = "request-loading-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Retrieving requests...";
+  const message = document.createElement("span");
+  message.textContent = "Please wait while the latest records are loaded.";
+
+  copy.append(title, message);
+  card.append(spinner, copy);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function beginDataLoading(titleText, messageText) {
+  requestLoadingCount++;
+  if (requestLoadingCount > 1) return;
+
+  if (requestLoadingHideTimer) {
+    window.clearTimeout(requestLoadingHideTimer);
+    requestLoadingHideTimer = null;
+  }
+  requestLoadingStartedAt = Date.now();
+  const overlay = getRequestLoadingIndicator();
+  const title = overlay.querySelector("strong");
+  const message = overlay.querySelector(".request-loading-card div span");
+  if (title) title.textContent = titleText;
+  if (message) message.textContent = messageText;
+  overlay.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => overlay.classList.add("active"));
+}
+
+function endDataLoading() {
+  requestLoadingCount = Math.max(0, requestLoadingCount - 1);
+  if (requestLoadingCount > 0) return;
+
+  const elapsed = Date.now() - requestLoadingStartedAt;
+  const delay = Math.max(0, 350 - elapsed);
+  requestLoadingHideTimer = window.setTimeout(() => {
+    if (requestLoadingCount > 0) return;
+    const overlay = document.getElementById("requestLoadingOverlay");
+    if (overlay) {
+      overlay.classList.remove("active");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+    requestLoadingHideTimer = null;
+  }, delay);
+}
+
+function beginRequestLoading() {
+  beginDataLoading("Retrieving requests...", "Please wait while the latest records are loaded.");
+}
+
+function endRequestLoading() {
+  endDataLoading();
+}
+
+function beginUserLoading() {
+  beginDataLoading("Retrieving users...", "Please wait while user accounts are loaded securely.");
+}
+
+function endUserLoading() {
+  endDataLoading();
+}
+
+function clearSession() {
+  sessionStorage.removeItem("authToken");
+  sessionStorage.removeItem(REQUEST_DATE_FROM_KEY);
+  sessionStorage.removeItem(REQUEST_DATE_TO_KEY);
+  ["user", "role", "fullname", "position", "branchid"].forEach(key => localStorage.removeItem(key));
+}
+
+async function apiRequest(options = {}) {
+  const token = sessionStorage.getItem("authToken");
+  if (!token) {
+    clearSession();
+    window.location.href = "login.html";
+    throw new Error("Authentication required");
+  }
+
+  const requestOptions = { ...options, method: "POST" };
+  let payload = {};
+  if (requestOptions.body) {
+    payload = JSON.parse(requestOptions.body);
+  }
+  if (payload.action === "getRequests" || payload.action === "getDashboardCounts") {
+    payload = { ...payload, ...getActiveRequestDateRange() };
+  }
+  requestOptions.body = JSON.stringify({ ...payload, token });
+  const isLoadingRequests = payload.action === "getRequests";
+  const isLoadingUsers = payload.action === "getUsers";
+  if (isLoadingRequests) beginRequestLoading();
+  if (isLoadingUsers) beginUserLoading();
+
+  try {
+    const response = await fetch(API, requestOptions);
+    const clone = response.clone();
+    let result;
+    try {
+      result = await clone.json();
+    } catch (err) {
+      throw new Error("The server returned an invalid response.");
+    }
+
+    if (result && result.error === "UNAUTHORIZED") {
+      clearSession();
+      window.location.href = "login.html";
+      throw new Error("Your session expired. Please sign in again.");
+    }
+    return response;
+  } finally {
+    if (isLoadingRequests) endRequestLoading();
+    if (isLoadingUsers) endUserLoading();
+  }
+}
 
 let pendingLoginData = null;
 let editingRequestId = null;
 let isSubmittingRequest = false;
 let allUsers = [];
 let editingUserEmail = null;
+let requestSubmissionKey = createSubmissionKey();
+const pendingStatusUpdates = new Set();
+let isLoggingOut = false;
+
+function createSubmissionKey() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID().replace(/-/g, "");
+  }
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeRequestDateFilter);
+} else {
+  initializeRequestDateFilter();
+}
 
 function getRoleLabel(role) {
   return role === "admin"
@@ -21,6 +287,9 @@ function persistSession(data) {
   const position = data.position || getRoleLabel(data.role);
   const branchid = data.branchid || "";
 
+  if (!data.token) throw new Error("The server did not issue a valid session.");
+
+  sessionStorage.setItem("authToken", data.token);
   localStorage.setItem("user", typeof data.user === "object" ? JSON.stringify(data.user) : data.user);
   localStorage.setItem("role", data.role);
   localStorage.setItem("fullname", fullname);
@@ -74,15 +343,12 @@ async function login() {
     });
     const data = await res.json();
 
-    console.log(data);
-
     if (data.success) {
       if (data.mustChangePassword) {
         pendingLoginData = {
-          ...data,
-          email,
-          currentPassword: password
+          email
         };
+        document.getElementById("password").value = "";
         const opened = openFirstLoginPasswordModal(email);
         if (!opened) {
           alert("This account must change its password before continuing, but the password update form is unavailable on this page. Please reload and try again.");
@@ -94,7 +360,7 @@ async function login() {
       persistSession(data);
       redirectToDashboard(data.role);
     } else {
-      alert("Invalid email or password");
+      alert(data.message || "Invalid email or password");
       setLoginButtonLoading(false);
     }
 
@@ -118,7 +384,7 @@ function openFirstLoginPasswordModal(email) {
   }
 
   if (emailInput) emailInput.value = email || "";
-  if (currentPasswordInput && pendingLoginData) currentPasswordInput.value = pendingLoginData.currentPassword || "";
+  if (currentPasswordInput) currentPasswordInput.value = "";
   if (newPasswordInput) newPasswordInput.value = "";
   if (confirmPasswordInput) confirmPasswordInput.value = "";
 
@@ -155,8 +421,8 @@ async function submitFirstLoginPasswordChange() {
     return;
   }
 
-  if (newPassword.length < 8) {
-    alert("Your new password must be at least 8 characters long.");
+  if (newPassword.length < 12) {
+    alert("Your new password must be at least 12 characters long.");
     return;
   }
 
@@ -187,7 +453,7 @@ async function submitFirstLoginPasswordChange() {
       return;
     }
 
-    persistSession(pendingLoginData);
+    persistSession(data);
     closeFirstLoginPasswordModal();
     pendingLoginData = null;
     alert("Password changed successfully. You can now continue.");
@@ -252,12 +518,52 @@ async function requestPasswordReset() {
   }
 }
 
-function logout() {
-  localStorage.removeItem("user");
-  localStorage.removeItem("role");
-  localStorage.removeItem("fullname");
-  localStorage.removeItem("position");
-  localStorage.removeItem("branchid");
+function showLogoutOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "logout-overlay";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.setAttribute("aria-label", "Signing out");
+
+  const card = document.createElement("div");
+  card.className = "logout-card";
+  const spinner = document.createElement("span");
+  spinner.className = "logout-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  const title = document.createElement("strong");
+  title.textContent = "Signing out...";
+  const message = document.createElement("span");
+  message.textContent = "Please wait while your secure session is closed.";
+
+  card.append(spinner, title, message);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  window.requestAnimationFrame(() => overlay.classList.add("active"));
+  return overlay;
+}
+
+async function logout() {
+  if (isLoggingOut) return;
+  if (!window.confirm("Are you sure you want to sign out?")) return;
+
+  isLoggingOut = true;
+  document.querySelectorAll('button[onclick*="logout"]').forEach(button => {
+    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+  });
+  showLogoutOverlay();
+
+  try {
+    const closeServerSession = sessionStorage.getItem("authToken")
+      ? apiRequest({ body: JSON.stringify({ action: "logout" }) })
+      : Promise.resolve();
+    const minimumAnimationTime = new Promise(resolve => window.setTimeout(resolve, 500));
+    const results = await Promise.allSettled([closeServerSession, minimumAnimationTime]);
+    if (results[0].status === "rejected") throw results[0].reason;
+  } catch (err) {
+    console.warn("The server session could not be closed cleanly.", err);
+  }
+  clearSession();
   window.location.href = "login.html";
 }
 
@@ -316,6 +622,7 @@ function setRequestSubmitLoading(isLoading) {
 
 function resetRequestForm() {
   editingRequestId = null;
+  requestSubmissionKey = createSubmissionKey();
 
   const title = document.getElementById("requestModalTitle");
   const submitButton = document.getElementById("requestSubmitButton");
@@ -386,7 +693,7 @@ function openEditRequest(requestId) {
 
 // 📥 LOAD REQUESTS
 async function loadRequests(tableId) {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -400,15 +707,15 @@ async function loadRequests(tableId) {
 
     html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td>${r[6]}</td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td>${escapeHtml(r[6])}</td>
         <td>
-          <button onclick="view('${r[0]}')">View</button>
+          <button onclick="view(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
     `;
@@ -453,7 +760,7 @@ async function submitRequest() {
   setRequestSubmitLoading(true);
 
   try {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: "POST",
       body: JSON.stringify({
         action: action,
@@ -463,10 +770,7 @@ async function submitRequest() {
         amount: amount,
         purpose: purpose,
         contactNumber: contactNumber,
-        tellerName: localStorage.getItem("fullname"),
-        tellerEmail: localStorage.getItem("user"),
-        tellerBranchId: localStorage.getItem("branchid"),
-        dateStamp: new Date().toLocaleString()
+        idempotencyKey: requestSubmissionKey
       })
     });
 
@@ -474,6 +778,8 @@ async function submitRequest() {
       throw new Error(`Request failed with status ${res.status}`);
     }
 
+    const result = await res.json();
+    if (!result.success) throw new Error(result.message || "The request was rejected by the server.");
     alert(successMessage);
     setRequestSubmitLoading(false);
     closeRequestModal();
@@ -487,9 +793,10 @@ async function submitRequest() {
 
 // 🔄 UPDATE STATUS
 async function updateStatus(id, status) {
+  const updateKey = `${id}:${status}`;
+  if (pendingStatusUpdates.has(updateKey)) return;
+
   const role = localStorage.getItem("role");
-  const fullname = localStorage.getItem("fullname");
-  const email = localStorage.getItem("user");
   let notes = "";
 
   if (role === "branch_manager" && status === "Returned") {
@@ -522,30 +829,61 @@ async function updateStatus(id, status) {
     }
   }
   
-  let updateData = {
+  const updateData = {
     action: "updateStatus",
     request_id: id,
     status: status,
-    role: role,
-    dateStamp: new Date().toLocaleString(),
     notes: notes
   };
-  
-  if (role === "branch_manager") {
-    updateData.branchManagerName = fullname;
-    updateData.branchManagerEmail = email;
-  } else if (role === "finance_manager") {
-    updateData.financeManagerName = fullname;
-    updateData.financeManagerEmail = email;
-  }
-  
-  await fetch(API, {
-    method: "POST",
-    body: JSON.stringify(updateData)
-  });
 
-  alert("Updated!");
-  location.reload();
+  pendingStatusUpdates.add(updateKey);
+  const actionButtons = Array.from(document.querySelectorAll(".modal-footer button"));
+  const originalButtonStates = actionButtons.map(button => ({
+    button,
+    disabled: button.disabled,
+    text: button.textContent
+  }));
+  actionButtons.forEach(button => { button.disabled = true; });
+
+  const selectedButton = status === "Approved"
+    ? document.getElementById("approveBtn")
+    : status === "Rejected"
+      ? document.getElementById("rejectBtn")
+      : actionButtons.find(button => (
+          (status === "Forwarded" && /forward/i.test(button.textContent)) ||
+          (status === "Returned" && /return to teller/i.test(button.textContent)) ||
+          (status === "Under Review" && /^return$/i.test(button.textContent.trim()))
+        ));
+  if (selectedButton) selectedButton.textContent = "Processing...";
+
+  let completed = false;
+  try {
+    const response = await apiRequest({
+      method: "POST",
+      body: JSON.stringify(updateData)
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      alert(result.message || "The status could not be updated.");
+      return;
+    }
+
+    completed = true;
+    alert("Updated!");
+    location.reload();
+  } catch (err) {
+    console.error("Failed to update request status", err);
+    alert(err.message || "The status could not be updated. Please try again.");
+  } finally {
+    pendingStatusUpdates.delete(updateKey);
+    if (!completed) {
+      originalButtonStates.forEach(state => {
+        state.button.disabled = state.disabled;
+        state.button.textContent = state.text;
+      });
+    }
+  }
 }
 
 
@@ -633,6 +971,11 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function safeImageDataUrl(value) {
+  const url = String(value || "");
+  return /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(url) ? url : "";
+}
+
 function getRequestNotes(request) {
   return Array.isArray(request) ? String(request[REQUEST_NOTES_INDEX] || "").trim() : "";
 }
@@ -687,8 +1030,6 @@ function calculateFinanceDashboardCounts(requests) {
     rejected: 0,
     review: 0
   };
-  const now = new Date();
-
   if (!Array.isArray(requests)) return counts;
 
   for (let i = 1; i < requests.length; i++) {
@@ -696,16 +1037,11 @@ function calculateFinanceDashboardCounts(requests) {
     if (!Array.isArray(request)) continue;
 
     const status = request[6];
-    const timestamp = parseRequestDatestamp(request[REQUEST_DATESTAMP_INDEX]);
-    const date = timestamp ? new Date(timestamp) : null;
-    const isCurrentMonth = date &&
-      date.getMonth() === now.getMonth() &&
-      date.getFullYear() === now.getFullYear();
 
     if (isSavingsCreditHeadApprovalRequest(request)) counts.awaiting++;
     if (status === "Under Review") counts.review++;
-    if (isCurrentMonth && status === "Approved") counts.approved++;
-    if (isCurrentMonth && status === "Rejected") counts.rejected++;
+    if (status === "Approved") counts.approved++;
+    if (status === "Rejected") counts.rejected++;
   }
 
   return counts;
@@ -726,7 +1062,7 @@ function updateFinanceDashboardCardsFromRequests(requests) {
 }
 
 async function loadStyledTable(tableId, role) {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -770,16 +1106,16 @@ async function loadStyledTable(tableId, role) {
 
       html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
         <td>
-          <button class="btn blue" onclick="openModal('${r[0]}')">View</button>
+          <button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
       `;
@@ -795,24 +1131,24 @@ async function loadStyledTable(tableId, role) {
       if (tableId === "branchTable") {
         // Branch managers only see requests from their branch
         if (!requestBelongsToBranch(r, branchId)) continue;
-        extraColumn = `<td>${r[7]}</td>`; // SUBMITTED BY
+        extraColumn = `<td>${escapeHtml(r[7])}</td>`; // SUBMITTED BY
       } else if (tableId === "financeTable") {
-        extraColumn = `<td>${r[8]}</td>`; // BRANCH MANAGER
+        extraColumn = `<td>${escapeHtml(r[8])}</td>`; // BRANCH MANAGER
       }
 
       html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
         ${extraColumn}
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
         <td>
-          <button class="btn blue" onclick="openModal('${r[0]}')">View</button>
+          <button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
       `;
@@ -841,22 +1177,22 @@ function openModal(id) {
 
   document.getElementById("modalContent").innerHTML = `
     <div style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-      <h3 style="margin: 0 0 5px 0;">Request Details — ${r[0]}</h3>
-      <p style="margin: 0; font-size: 13px; color: #666;">Member: ${r[1]} · Submitted ${dateStr}</p>
+      <h3 style="margin: 0 0 5px 0;">Request Details — ${escapeHtml(r[0])}</h3>
+      <p style="margin: 0; font-size: 13px; color: #666;">Member: ${escapeHtml(r[1])} · Submitted ${dateStr}</p>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
       <div>
         <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 5px;">Member Name</label>
-        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${r[1]}</p>
+        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${escapeHtml(r[1])}</p>
       </div>
       <div>
         <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 5px;">Submitted By</label>
-        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${tellerName}</p>
+        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${escapeHtml(tellerName)}</p>
       </div>
       <div>
         <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 5px;">Contact Number</label>
-        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${r[11] || 'N/A'}</p>
+        <p style="margin: 0; font-size: 16px; font-weight: 600; color: #333;">${escapeHtml(r[11] || 'N/A')}</p>
       </div>
     </div>
 
@@ -878,12 +1214,12 @@ function openModal(id) {
 
     <div style="margin-bottom: 20px;">
       <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 8px;">Purpose of Withdrawal</label>
-      <p style="margin: 0; font-size: 14px; color: #333;">${r[5]}</p>
+      <p style="margin: 0; font-size: 14px; color: #333;">${escapeHtml(r[5])}</p>
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px;">
       <label style="font-size: 11px; color: #999; text-transform: uppercase; font-weight: 600;">Current Status:</label>
-      <span class="${getStatusClass(r[6])}" style="padding: 4px 10px; border-radius: 20px; font-size: 12px;">${r[6]}</span>
+      <span class="${getStatusClass(r[6])}" style="padding: 4px 10px; border-radius: 20px; font-size: 12px;">${escapeHtml(r[6])}</span>
     </div>
     ${((r[6] === "Returned" || r[6] === "Under Review" || r[6] === "Rejected") && requestNotes) ? `
       <div style="margin-top: 20px; padding: 16px; background: #fff4f4; border-left: 4px solid #dc2626; border-radius: 6px;">
@@ -987,45 +1323,39 @@ async function printRequest() {
 
   let settings = {};
   try {
-    const settingsRes = await fetch(API, {
+    const settingsRes = await apiRequest({
       method: "POST",
       body: JSON.stringify({ action: "getSettings" })
     });
     const settingsData = await settingsRes.json();
     settings = settingsData.settings || {};
-    // After: settings = settingsData.settings || {};
-    console.log('Print settings loaded:', settings);
   } catch (err) {
     console.warn("Unable to load print settings:", err);
   }
 
-  const headerImageSrc = settings.reportHeaderImage || settings.headerImage || "";
+  const headerImageSrc = safeImageDataUrl(settings.reportHeaderImage || settings.headerImage || "");
 
-  const tellerName = r[7] || settings.tellerName || localStorage.getItem("fullname") || "Teller";
-  const branchManagerName = r[8] || settings.branchManagerName || "Branch Manager";
-  const financeManagerName = r[9] || settings.financeManagerName || "Savings and Credit Head";
+  const tellerName = escapeHtml(r[7] || settings.tellerName || localStorage.getItem("fullname") || "Teller");
+  const branchManagerName = escapeHtml(r[8] || settings.branchManagerName || "Branch Manager");
+  const financeManagerName = escapeHtml(r[9] || settings.financeManagerName || "Savings and Credit Head");
   const dateStr = r[10]
     ? new Date(r[10]).toLocaleDateString()
     : "N/A";
 
-  const tellerSignature = settings.tellerSignatureData || "";
-  const branchSignature = settings.branchManagerSignatureData || "";
-  const financeSignature = settings.financeManagerSignatureData || "";
-  const memberName = r[1] || "N/A";
-  const contactNumber = r[11] || "N/A";
-  const reason = r[5] || "N/A";
+  const tellerSignature = safeImageDataUrl(settings.tellerSignatureData || "");
+  const branchSignature = safeImageDataUrl(settings.branchManagerSignatureData || "");
+  const financeSignature = safeImageDataUrl(settings.financeManagerSignatureData || "");
+  const memberName = escapeHtml(r[1] || "N/A");
+  const contactNumber = escapeHtml(r[11] || "N/A");
+  const reason = escapeHtml(r[5] || "N/A");
   const totalAmount = `&#8369;${parseFloat(r[2] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const withdrawnAmount = `&#8369;${parseFloat(r[3] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const balanceAmount = `&#8369;${parseFloat(r[4] || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  console.log('Settings loaded for print:', settings);
-  console.log('Header image src:', headerImageSrc, 'length:', headerImageSrc.length);
-  console.log('Finance signature:', financeSignature, 'length:', financeSignature.length);
-
   const printWindow = window.open("", "PRINT", "height=900,width=900");
   if (!printWindow) return;
 
-  printWindow.document.write(`<html><head><title>Investment Withdrawal Form ${r[0]}</title>`);
+  printWindow.document.write(`<html><head><title>Investment Withdrawal Form ${escapeHtml(r[0])}</title>`);
   printWindow.document.write(`<style>
       @page{size:8.5in 11in; margin:11mm 12mm;}
       *{box-sizing:border-box;}
@@ -1088,7 +1418,7 @@ async function loadDashboardCounts() {
   let data = allRequests;
 
   if (!Array.isArray(data) || data.length <= 1) {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: "POST",
       body: JSON.stringify({ action: "getRequests" })
     });
@@ -1101,7 +1431,7 @@ async function loadDashboardCounts() {
 }
 
 async function loadTellerCounts() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -1133,7 +1463,7 @@ async function loadTellerCounts() {
 }
 
 async function loadBranchTable() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -1153,17 +1483,17 @@ async function loadBranchTable() {
 
       html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td>${r[7]}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td>${escapeHtml(r[7])}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
         <td>
-          <button class="btn blue" onclick="openModal('${r[0]}')">View</button>
+          <button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
       `;
@@ -1174,7 +1504,7 @@ async function loadBranchTable() {
 }
 
 async function loadBranchCounts() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -1204,7 +1534,7 @@ async function loadBranchCounts() {
 }
 
 async function loadFinanceTable() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: "POST",
     body: JSON.stringify({ action: "getRequests" })
   });
@@ -1234,7 +1564,7 @@ function renderFinanceTable(searchText = "", statusFilter = "All Statuses") {
 
     forwardedCount++;
 
-    const rowText = `${r[0]} ${r[1]} ${r[5]} ${r[8]} ${r[6]}`.toLowerCase();
+    const rowText = `${escapeHtml(r[0])} ${escapeHtml(r[1])} ${escapeHtml(r[5])} ${escapeHtml(r[8])} ${escapeHtml(r[6])}`.toLowerCase();
     if (searchText && !rowText.includes(searchText.toLowerCase())) continue;
 
     if (statusFilter !== "All Statuses" && r[6] !== statusFilter) continue;
@@ -1244,17 +1574,17 @@ function renderFinanceTable(searchText = "", statusFilter = "All Statuses") {
 
     html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td>${r[8] || "N/A"}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td>${escapeHtml(r[8] || "N/A")}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
         <td>
-          <button class="btn blue" onclick="openModal('${r[0]}')">View</button>
+          <button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
     `;
@@ -1371,7 +1701,7 @@ function navigateToBranch(page) {
 
 function loadBranchSubmitted() {
   const branchId = localStorage.getItem("branchid");
-  fetch(API, {
+  apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'getRequests' })
   })
@@ -1390,16 +1720,16 @@ function loadBranchSubmitted() {
           const dateStr = r[10] ? new Date(r[10]).toLocaleString() : 'N/A';
           html += `
             <tr>
-              <td>${r[0]}</td>
-              <td>${r[1]}</td>
-              <td>₱${r[2]}</td>
-              <td>₱${r[3]}</td>
-              <td>₱${r[4]}</td>
-              <td>${r[5]}</td>
-              <td>${r[7]}</td>
-              <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+              <td>${escapeHtml(r[0])}</td>
+              <td>${escapeHtml(r[1])}</td>
+              <td>₱${escapeHtml(r[2])}</td>
+              <td>₱${escapeHtml(r[3])}</td>
+              <td>₱${escapeHtml(r[4])}</td>
+              <td>${escapeHtml(r[5])}</td>
+              <td>${escapeHtml(r[7])}</td>
+              <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
               <td>${dateStr}</td>
-              <td><button class="btn blue" onclick="openModal('${r[0]}')">View</button></td>
+              <td><button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button></td>
             </tr>
           `;
         }
@@ -1467,7 +1797,7 @@ function navigateToFinance(page) {
 
 async function loadFinanceDashboard() {
   if (!Array.isArray(allRequests) || allRequests.length <= 1) {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: "POST",
       body: JSON.stringify({ action: "getRequests" })
     });
@@ -1566,7 +1896,7 @@ async function loadAuditLogs() {
 
   try {
     if (!Array.isArray(allRequests) || allRequests.length <= 1) {
-      const res = await fetch(API, {
+      const res = await apiRequest({
         method: "POST",
         body: JSON.stringify({ action: "getRequests" })
       });
@@ -1620,6 +1950,8 @@ function formatFirstLoginFlag(value) {
 }
 
 function navigateToAdmin(section) {
+  activeAdminSection = section;
+  setRequestDateFilterVisibility(section === 'requests');
   document.querySelectorAll('.sidebar-main .sidebar-btn').forEach(btn => btn.classList.remove('active'));
   const selectedButton = Array.from(document.querySelectorAll('.sidebar-main .sidebar-btn'))
     .find(btn => btn.getAttribute('onclick')?.includes(`navigateToAdmin('${section}')`));
@@ -1649,7 +1981,7 @@ function navigateToAdmin(section) {
 
 async function loadUsers() {
   try {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: 'POST',
       body: JSON.stringify({ action: 'getUsers' })
     });
@@ -1807,7 +2139,7 @@ async function submitUserForm() {
   }
 
   try {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: 'POST',
       body: JSON.stringify({
         action: isEditing ? 'updateUser' : 'createUser',
@@ -1838,7 +2170,7 @@ async function submitUserForm() {
 }
 
 async function loadAdminTable() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'getRequests' })
   });
@@ -1856,16 +2188,16 @@ async function loadAdminTable() {
 
     html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td>${r[8] || '—'}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td>${escapeHtml(r[8] || '—')}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
-        <td><button class="btn blue" onclick="openModal('${r[0]}')">View</button></td>
+        <td><button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button></td>
       </tr>
     `;
   }
@@ -1878,7 +2210,7 @@ async function loadAdminTable() {
 }
 
 async function loadAdminCounts() {
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'getRequests' })
   });
@@ -1921,7 +2253,7 @@ function filterAdminTable() {
     const r = allRequests[i];
     if (!Array.isArray(r) || !r.length) continue;
 
-    const rowText = `${r[0]} ${r[1]} ${r[5]} ${r[8]} ${r[6]}`.toLowerCase();
+    const rowText = `${escapeHtml(r[0])} ${escapeHtml(r[1])} ${escapeHtml(r[5])} ${escapeHtml(r[8])} ${escapeHtml(r[6])}`.toLowerCase();
     if (searchText && !rowText.includes(searchText)) continue;
     if (statusFilter !== 'All Statuses' && r[6] !== statusFilter) continue;
 
@@ -1930,16 +2262,16 @@ function filterAdminTable() {
 
     html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td>${r[8] || '—'}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td>${escapeHtml(r[8] || '—')}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
-        <td><button class="btn blue" onclick="openModal('${r[0]}')">View</button></td>
+        <td><button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button></td>
       </tr>
     `;
   }
@@ -1952,7 +2284,7 @@ function filterAdminTable() {
 
 async function loadSettings() {
   try {
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: 'POST',
       body: JSON.stringify({ action: 'getSettings' })
     });
@@ -1977,8 +2309,9 @@ async function loadSettings() {
     previewMap.forEach(item => {
       const img = document.getElementById(item.id);
       if (img) {
-        img.src = item.value || '';
-        img.style.display = item.value ? 'block' : 'none';
+        const safeValue = safeImageDataUrl(item.value);
+        img.src = safeValue;
+        img.style.display = safeValue ? 'block' : 'none';
       }
     });
   } catch (err) {
@@ -1991,7 +2324,7 @@ async function saveSignatorySettings() {
   const branchSignatory = document.getElementById('branchManagerSignatory')?.value || '';
   const financeSignatory = document.getElementById('financeManagerSignatory')?.value || '';
 
-  const res = await fetch(API, {
+  const res = await apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'saveSettings', settings: {
       tellerName: tellerSignatory,
@@ -2018,6 +2351,10 @@ function uploadSignature(role) {
   }
 
   const file = input.files[0];
+  if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type) || file.size > 33000) {
+    alert('Please select a PNG, JPEG, GIF, or WebP image smaller than 33KB.');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = async (event) => {
     const dataUrl = event.target.result;
@@ -2027,7 +2364,7 @@ function uploadSignature(role) {
     }
 
     const base64 = dataUrl.split(',')[1];
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: 'POST',
       body: JSON.stringify({ action: 'saveSignature', role: role, mimeType: file.type, fileBase64: base64 })
     });
@@ -2056,7 +2393,7 @@ async function clearSignature(role) {
   }
 
   const key = role === 'teller' ? 'tellerSignatureData' : role === 'branchManager' ? 'branchManagerSignatureData' : 'financeManagerSignatureData';
-  await fetch(API, {
+  await apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'saveSettings', settings: { [key]: '' } })
   });
@@ -2071,8 +2408,8 @@ function uploadLogo() {
   }
 
   const file = input.files[0];
-  if (file.size > 100000) {
-    alert('Please select an image smaller than 100KB.');
+  if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type) || file.size > 33000) {
+    alert('Please select a PNG, JPEG, GIF, or WebP image smaller than 33KB.');
     return;
   }
   const reader = new FileReader();
@@ -2091,7 +2428,7 @@ function uploadLogo() {
       preview.style.display = 'block';
     }
 
-    const res = await fetch(API, {
+    const res = await apiRequest({
       method: 'POST',
       body: JSON.stringify({ action: 'saveSettings', settings: { reportHeaderImage: dataUrl } })
     });
@@ -2118,7 +2455,7 @@ async function clearLogo() {
     input.value = '';
   }
 
-  await fetch(API, {
+  await apiRequest({
     method: 'POST',
     body: JSON.stringify({ action: 'saveSettings', settings: { reportHeaderImage: '' } })
   });
@@ -2195,16 +2532,16 @@ function loadTellerSubmissions() {
 
       html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[2]}</td>
-        <td>₱${r[3]}</td>
-        <td>₱${r[4]}</td>
-        <td>${r[5]}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[2])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>₱${escapeHtml(r[4])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
         <td>${dateStr}</td>
         <td>
-          <button class="btn blue" onclick="openModal('${r[0]}')">View</button>
+          <button class="btn blue" onclick="openModal(${escapeHtml(JSON.stringify(String(r[0])))})">View</button>
         </td>
       </tr>
       `;
@@ -2238,14 +2575,14 @@ function loadTellerHistory() {
 
       html += `
       <tr>
-        <td>${r[0]}</td>
-        <td>${r[1]}</td>
-        <td>₱${r[3]}</td>
-        <td>${r[5]}</td>
-        <td><span class="${getStatusClass(r[6])}">${r[6]}</span></td>
-        <td>${r[7]}</td>
-        <td>${r[8] || "—"}</td>
-        <td>${r[9] || "—"}</td>
+        <td>${escapeHtml(r[0])}</td>
+        <td>${escapeHtml(r[1])}</td>
+        <td>₱${escapeHtml(r[3])}</td>
+        <td>${escapeHtml(r[5])}</td>
+        <td><span class="${getStatusClass(r[6])}">${escapeHtml(r[6])}</span></td>
+        <td>${escapeHtml(r[7])}</td>
+        <td>${escapeHtml(r[8] || "—")}</td>
+        <td>${escapeHtml(r[9] || "—")}</td>
         <td>${dateStr}</td>
       </tr>
       `;
