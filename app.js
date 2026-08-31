@@ -316,9 +316,37 @@ function setLoginButtonLoading(isLoading) {
     return;
   }
 
-  button.disabled = false;
+  button.disabled = !canSubmitLogin();
   button.classList.remove("is-loading");
   button.innerHTML = "Sign In &rarr;";
+}
+
+function canSubmitLogin() {
+  const email = document.getElementById("email");
+  const password = document.getElementById("password");
+  return Boolean(email && password && email.value.trim() && password.value);
+}
+
+function initializeLoginForm() {
+  const email = document.getElementById("email");
+  const password = document.getElementById("password");
+  const button = document.getElementById("loginButton");
+  if (!email || !password || !button) return;
+
+  const updateButton = () => {
+    if (!button.classList.contains("is-loading")) button.disabled = !canSubmitLogin();
+  };
+
+  email.addEventListener("input", updateButton);
+  password.addEventListener("input", updateButton);
+  [email, password].forEach(input => {
+    input.addEventListener("keydown", event => {
+      if (event.key !== "Enter" || !canSubmitLogin() || button.disabled) return;
+      event.preventDefault();
+      login();
+    });
+  });
+  updateButton();
 }
 
 async function login() {
@@ -2595,3 +2623,132 @@ function loadTellerHistory() {
   const historyCount = document.getElementById("historyCount");
   if (historyCount) historyCount.innerText = `${count} transaction${count !== 1 ? 's' : ''}`;
 }
+
+const DASHBOARD_PAGE_SIZE = 10;
+
+function isEmptyTableMessage(row) {
+  return row.cells.length === 1 && Number(row.cells[0].getAttribute("colspan") || 1) > 1;
+}
+
+function renderTablePage(tbody, requestedPage) {
+  const rows = Array.from(tbody.rows);
+  const dataRows = rows.filter(row => !isEmptyTableMessage(row));
+  const totalPages = Math.max(1, Math.ceil(dataRows.length / DASHBOARD_PAGE_SIZE));
+  const page = Math.min(Math.max(1, requestedPage || 1), totalPages);
+  tbody.dataset.currentPage = String(page);
+
+  rows.forEach(row => { row.hidden = true; });
+  if (!dataRows.length) {
+    rows.forEach(row => { row.hidden = false; });
+  } else {
+    const start = (page - 1) * DASHBOARD_PAGE_SIZE;
+    dataRows.slice(start, start + DASHBOARD_PAGE_SIZE).forEach(row => { row.hidden = false; });
+  }
+
+  const pager = tbody._dashboardPager;
+  if (!pager) return;
+  const first = dataRows.length ? ((page - 1) * DASHBOARD_PAGE_SIZE) + 1 : 0;
+  const last = Math.min(page * DASHBOARD_PAGE_SIZE, dataRows.length);
+  pager.querySelector(".pagination-summary").textContent = dataRows.length
+    ? `Showing ${first}-${last} of ${dataRows.length} records`
+    : "0 records";
+  pager.querySelector(".pagination-page").textContent = `Page ${page} of ${totalPages}`;
+  pager.querySelector('[data-page="previous"]').disabled = page <= 1;
+  pager.querySelector('[data-page="next"]').disabled = page >= totalPages;
+}
+
+function enhanceDashboardTable(tbody) {
+  if (!tbody || tbody.dataset.paginationReady === "true") return;
+  const table = tbody.closest("table");
+  if (!table) return;
+
+  let scrollRegion = table.parentElement;
+  if (!scrollRegion.classList.contains("table-scroll-region")) {
+    scrollRegion = document.createElement("div");
+    scrollRegion.className = "table-scroll-region";
+    table.parentNode.insertBefore(scrollRegion, table);
+    scrollRegion.appendChild(table);
+  }
+
+  const pager = document.createElement("div");
+  pager.className = "table-pagination";
+  pager.setAttribute("aria-label", "Table pagination");
+  pager.innerHTML = `
+    <span class="pagination-summary">0 records</span>
+    <div class="pagination-actions">
+      <button class="btn btn-sm" type="button" data-page="previous">Previous</button>
+      <span class="pagination-page" aria-live="polite">Page 1 of 1</span>
+      <button class="btn btn-sm" type="button" data-page="next">Next</button>
+    </div>`;
+  scrollRegion.appendChild(pager);
+  tbody.dataset.paginationReady = "true";
+  tbody._dashboardPager = pager;
+
+  pager.addEventListener("click", event => {
+    const control = event.target.closest("[data-page]");
+    if (!control) return;
+    const current = Number(tbody.dataset.currentPage || 1);
+    renderTablePage(tbody, current + (control.dataset.page === "next" ? 1 : -1));
+  });
+
+  new MutationObserver(() => renderTablePage(tbody, 1)).observe(tbody, { childList: true });
+  renderTablePage(tbody, 1);
+}
+
+function initializeDashboardPagination() {
+  document.querySelectorAll(".main table tbody").forEach(enhanceDashboardTable);
+}
+
+function initializeMobileSidebar() {
+  const container = document.querySelector(".container");
+  const sidebar = container?.querySelector(".sidebar");
+  if (!container || !sidebar) return;
+
+  const navBar = document.createElement("div");
+  navBar.className = "mobile-nav-bar";
+  navBar.innerHTML = `
+    <span class="mobile-nav-title">WithdrawSys</span>
+    <button class="mobile-nav-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false">
+      <span class="hamburger-icon" aria-hidden="true"></span>
+    </button>`;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "sidebar-backdrop";
+  backdrop.setAttribute("aria-hidden", "true");
+  container.insertBefore(navBar, sidebar);
+  container.insertBefore(backdrop, sidebar);
+
+  const toggle = navBar.querySelector(".mobile-nav-toggle");
+  const sidebarHeader = sidebar.querySelector(".sidebar-header");
+  const closeButton = document.createElement("button");
+  closeButton.className = "sidebar-close";
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", "Close navigation menu");
+  closeButton.innerHTML = "&times;";
+  sidebarHeader?.appendChild(closeButton);
+
+  const setOpen = open => {
+    document.body.classList.toggle("sidebar-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+  };
+
+  toggle.addEventListener("click", () => setOpen(!document.body.classList.contains("sidebar-open")));
+  closeButton.addEventListener("click", () => setOpen(false));
+  backdrop.addEventListener("click", () => setOpen(false));
+  sidebar.addEventListener("click", event => {
+    if (event.target.closest(".sidebar-btn")) setOpen(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") setOpen(false);
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 768) setOpen(false);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initializeLoginForm();
+  initializeDashboardPagination();
+  initializeMobileSidebar();
+});
